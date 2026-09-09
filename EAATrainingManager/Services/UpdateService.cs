@@ -24,6 +24,12 @@ public class UpdateCheckResult
 public class UpdateService
 {
     private const string CurrentAppVersion = "2.2.0";
+    private const string RepoOwner = "michaelmagdy15";
+    private const string RepoName = "EAA-TrainingManager";
+    
+    // Read-only token for private repo updates (fine-grained: Contents & Releases Read-Only)
+    public static string ReadOnlyToken { get; set; } = "";
+
     private readonly HttpClient _httpClient;
 
     public UpdateService()
@@ -32,12 +38,14 @@ public class UpdateService
         {
             Timeout = TimeSpan.FromSeconds(5) // Fast timeout for airfield/mobile slow internet
         };
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", "EAA-TrainingManager-Desktop");
     }
 
     public string GetCurrentVersion() => CurrentAppVersion;
 
     /// <summary>
     /// Checks for lightweight delta patches (2-5 MB) instead of downloading entire 240 MB runtime.
+    /// Supports both public repos and 100% private repos using GitHub API with a read-only token.
     /// Gracefully handles 100% offline environments without exceptions.
     /// </summary>
     public async Task<UpdateCheckResult> CheckForUpdatesAsync(string? customManifestUrl = null)
@@ -48,12 +56,28 @@ public class UpdateService
             LatestVersion = CurrentAppVersion
         };
 
-        // Fallback default manifest URL on user's GitHub repository
-        string manifestUrl = customManifestUrl ?? "https://raw.githubusercontent.com/michaelmagdy15/EAA-TrainingManager/main/update_manifest.json";
-
         try
         {
-            using var response = await _httpClient.GetAsync(manifestUrl);
+            using var request = new HttpRequestMessage(HttpMethod.Get, "");
+
+            if (!string.IsNullOrWhiteSpace(customManifestUrl))
+            {
+                request.RequestUri = new Uri(customManifestUrl);
+            }
+            else if (!string.IsNullOrWhiteSpace(ReadOnlyToken))
+            {
+                // Private repo: access via GitHub REST API with raw accept header
+                request.RequestUri = new Uri($"https://api.github.com/repos/{RepoOwner}/{RepoName}/contents/update_manifest.json");
+                request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ReadOnlyToken);
+                request.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/vnd.github.raw"));
+            }
+            else
+            {
+                // Public fallback
+                request.RequestUri = new Uri($"https://raw.githubusercontent.com/{RepoOwner}/{RepoName}/main/update_manifest.json");
+            }
+
+            using var response = await _httpClient.SendAsync(request);
             if (!response.IsSuccessStatusCode)
             {
                 result.IsOffline = true;
