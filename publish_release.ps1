@@ -25,11 +25,25 @@ Write-Host "==================================================================" 
 Write-Host "  EAA TRAINING MANAGER - ONE-CLICK RELEASE AUTOMATION ENGINE      " -ForegroundColor Yellow
 Write-Host "==================================================================" -ForegroundColor Cyan
 
-# 0. Set Authentication Token for Private GitHub Operations
+# 0. Set Authentication for Private GitHub Operations
 $GitHubRepo = "michaelmagdy15/EAA-TrainingManager"
-$Token = "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"
-[Environment]::SetEnvironmentVariable('GH_TOKEN', $Token, 'Process')
-[Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $Token, 'Process')
+$isGhLoggedIn = $false
+try {
+    $null = gh auth status 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        $isGhLoggedIn = $true
+    }
+} catch { }
+
+if ($isGhLoggedIn) {
+    Write-Host "  -> GitHub CLI authenticated via user credentials." -ForegroundColor Green
+    [Environment]::SetEnvironmentVariable('GH_TOKEN', $null, 'Process')
+    [Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $null, 'Process')
+} else {
+    $Token = "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"
+    [Environment]::SetEnvironmentVariable('GH_TOKEN', $Token, 'Process')
+    [Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $Token, 'Process')
+}
 
 # 1. Determine Target Version
 $ManifestPath = Join-Path $ScriptRoot "update_manifest.json"
