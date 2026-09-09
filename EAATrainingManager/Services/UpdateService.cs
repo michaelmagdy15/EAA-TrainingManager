@@ -28,7 +28,7 @@ public class UpdateService
     private const string RepoName = "EAA-TrainingManager";
     
     // Read-only token for private repo updates (fine-grained: Contents & Releases Read-Only)
-    public static string ReadOnlyToken { get; set; } = "";
+    public static string ReadOnlyToken { get; set; } = "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";
 
     private readonly HttpClient _httpClient;
 
