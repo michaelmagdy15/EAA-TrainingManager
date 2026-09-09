@@ -1,0 +1,239 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="EAATrainingManager.Dialogs.AddOrderDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="إضافة وتعديل أمر تدريب (نافذة الإدخال الذكية)"
+    PrimaryButtonText="حفظ وتوثيق الأمر ✓"
+    CloseButtonText="إلغاء"
+    DefaultButton="Primary"
+    PrimaryButtonClick="ContentDialog_PrimaryButtonClick">
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="540" MinWidth="480">
+        <StackPanel Spacing="16" Padding="4">
+
+            <!-- SECTION 1: البيانات الثابتة للطالب (مع محرك كشف التكرار اللحظي) -->
+            <Border Style="{StaticResource FluentCardBorder}" Background="{ThemeResource LayerFillColorAltBrush}" Padding="14">
+                <StackPanel Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE77B;" Foreground="#0D6EFD" FontSize="16" FlowDirection="LeftToRight" />
+                        <TextBlock Text="البيانات الأساسية للطالب (المطابقة والتوحيد اللحظي)" FontWeight="Bold" FontSize="14" />
+                    </StackPanel>
+
+                    <!-- Student Name with Live Deduplication -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="اسم الطالب بالكامل:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <AutoSuggestBox x:Name="TxtStudentName"
+                                        PlaceholderText="اكتب اسم الطالب للبحث أو الإضافة..."
+                                        TextChanged="TxtStudentName_TextChanged"
+                                        SuggestionChosen="TxtStudentName_SuggestionChosen"
+                                        CornerRadius="6" />
+                        <!-- Deduplication Live Feedback -->
+                        <TextBlock x:Name="TxtDedupStatus"
+                                   Text="سيتم إنشاء ملف جديد للطالب"
+                                   FontSize="11"
+                                   Foreground="#198754"
+                                   FontWeight="SemiBold" />
+                    </StackPanel>
+
+                    <!-- Nationality Quick Toggle -->
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="نوع الجنسية:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <ComboBox x:Name="ComboNationalityType" SelectedIndex="0" SelectionChanged="ComboNationalityType_SelectionChanged" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="مصري (محلي)" Tag="EG" />
+                                <ComboBoxItem Content="وافد (دولي)" Tag="INTL" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <!-- Foreign Country Selection (Visible when INTL is selected) -->
+                        <StackPanel x:Name="PanelForeignCountry" Grid.Column="1" Spacing="4" Visibility="Collapsed">
+                            <TextBlock Text="دولة الوافد:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <ComboBox x:Name="ComboForeignCountry" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="سعودي" />
+                                <ComboBoxItem Content="إماراتي" />
+                                <ComboBoxItem Content="ليبي" />
+                                <ComboBoxItem Content="سوداني" />
+                                <ComboBoxItem Content="كويتي" />
+                                <ComboBoxItem Content="عراقي" />
+                                <ComboBoxItem Content="أردني" />
+                                <ComboBoxItem Content="يمني" />
+                                <ComboBoxItem Content="سوري" />
+                                <ComboBoxItem Content="أخرى" />
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- SECTION 2: محدد المسار التدريبي (المحرك الديناميكي) -->
+            <Border Style="{StaticResource FluentCardBorder}" Padding="14">
+                <StackPanel Spacing="12">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <FontIcon Glyph="&#xE7C4;" Foreground="#6F42C1" FontSize="16" FlowDirection="LeftToRight" />
+                        <TextBlock Text="المسار التدريبي وتخصيص الحقول الذكية" FontWeight="Bold" FontSize="14" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="اختر المسار التدريبي:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <ComboBox x:Name="ComboTrainingStream"
+                                  SelectedIndex="0"
+                                  SelectionChanged="ComboTrainingStream_SelectionChanged"
+                                  HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="النظام الحر - 61 (Part 61)" Tag="Part61" />
+                            <ComboBoxItem Content="التقييم والمعادلات (Evaluation)" Tag="Evaluation" />
+                            <ComboBoxItem Content="تجديد طراز وبناء ساعات (Type Rating &amp; Hours)" Tag="TypeRating" />
+                            <ComboBoxItem Content="الدفعات المعتمدة - 141 (Part 141)" Tag="Part141" />
+                        </ComboBox>
+                    </StackPanel>
+
+                    <!-- DYNAMIC SUB-PANEL 1: النظام الحر 61 -->
+                    <StackPanel x:Name="PanelPart61" Spacing="10" Visibility="Visible">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="الكورس المطلوب:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <ComboBox x:Name="ComboPart61Course" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="PPL (طيار خاص)" />
+                                <ComboBoxItem Content="CPL/IR (طيران تجاري وعدادات)" />
+                                <ComboBoxItem Content="IR منفصل (أهلية طيران عدادات)" />
+                                <ComboBoxItem Content="CPL منفصل (طيران تجاري)" />
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- DYNAMIC SUB-PANEL 2: التقييم والمعادلات -->
+                    <StackPanel x:Name="PanelEvaluation" Spacing="10" Visibility="Collapsed">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="نوع المعادلة أو التقييم:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <ComboBox x:Name="ComboEvalType" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="معادلة رخصة خط جوي (ATP)" />
+                                <ComboBoxItem Content="معادلة رخصة طيار خاص (PPL)" />
+                                <ComboBoxItem Content="استكمال ساعات واختبار CPL/IR" />
+                                <ComboBoxItem Content="تقييم مستوى واختبار كفاءة (Check-Ride)" />
+                            </ComboBox>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- DYNAMIC SUB-PANEL 3: تجديد طراز وبناء ساعات (with academy fleet) -->
+                    <StackPanel x:Name="PanelTypeRating" Spacing="10" Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="نوع النشاط:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <ComboBox x:Name="ComboTypeActivity" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="تجديد وفروق طراز" />
+                                    <ComboBoxItem Content="شراء وبناء ساعات طيران" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="طراز الطائرة (أسطول الأكاديمية):" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <ComboBox x:Name="ComboFleetAircraft" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                    <ComboBoxItem Content="Cessna 172 (C172)" Tag="C172" />
+                                    <ComboBoxItem Content="C172 Gas (G1000 Glass Cockpit)" Tag="C172 Gas" />
+                                    <ComboBoxItem Content="Beechcraft Baron 58 (B58)" Tag="B58" />
+                                    <ComboBoxItem Content="Beechcraft Bonanza (G36)" Tag="G36" />
+                                    <ComboBoxItem Content="Cessna 210 Centurion" Tag="Cessna Centurion" />
+                                    <ComboBoxItem Content="BE-76 Duchess" Tag="BE-76 Duchess" />
+                                    <ComboBoxItem Content="Piper PA-28/34" Tag="Piper PA-28/34" />
+                                </ComboBox>
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="عدد ساعات الطيران المطلوبة:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <NumberBox x:Name="NumFlightHours" Value="10" Minimum="1" Maximum="500" SpinButtonPlacementMode="Inline" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- DYNAMIC SUB-PANEL 4: الدفعات المعتمدة 141 -->
+                    <StackPanel x:Name="PanelPart141" Spacing="10" Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="اسم البرنامج والفرقة:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="TxtBatchProgramName" Text="طيران تجاري نظامي معتمد" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="رقم الدفعة:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="TxtBatchNumber" PlaceholderText="مثال: 72" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- COMMON ORDER FIELDS: رقم الأمر والتواريخ -->
+                    <Grid ColumnSpacing="12" Margin="0,4,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="رقم أمر التدريب:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBox x:Name="TxtOrderNumber" PlaceholderText="مثال: 45/2026" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="سنة الأمر:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <ComboBox x:Name="ComboOrderYear" SelectedIndex="0" HorizontalAlignment="Stretch">
+                                <ComboBoxItem Content="2026" />
+                                <ComboBoxItem Content="2025" />
+                                <ComboBoxItem Content="2024" />
+                            </ComboBox>
+                        </StackPanel>
+                    </Grid>
+
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Spacing="4">
+                            <TextBlock Text="تاريخ الالتحاق (البدء):" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <CalendarDatePicker x:Name="PickerEnrollmentDate" HorizontalAlignment="Stretch" />
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock Text="تاريخ النهاية (اختياري):" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <CalendarDatePicker x:Name="PickerCompletionDate" HorizontalAlignment="Stretch" PlaceholderText="فارغ = قيد التدريب" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Notes -->
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="ملاحظات إضافية:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBox x:Name="TxtNotes" PlaceholderText="ملاحظات الطائرة، الساعات، أو القرار الوزاري..." TextWrapping="Wrap" Height="50" />
+                    </StackPanel>
+
+                </StackPanel>
+            </Border>
+
+            <!-- Error Banner -->
+            <TextBlock x:Name="TxtError"
+                       Text=""
+                       Foreground="#DC3545"
+                       FontWeight="Bold"
+                       FontSize="12"
+                       Visibility="Collapsed"
+                       TextWrapping="Wrap" />
+
+        </StackPanel>
+    </ScrollViewer>
+</ContentDialog>

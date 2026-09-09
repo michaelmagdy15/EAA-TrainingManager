@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Application
+    x:Class="EAATrainingManager.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:EAATrainingManager">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Typography & Font Standards -->
+            <FontFamily x:Key="EAAFontFamily">Segoe UI Variable, Segoe UI, Tahoma, Arial</FontFamily>
+
+            <!-- Frosted Glass Acrylic Brushes -->
+            <AcrylicBrush x:Key="GlassAcrylicBrush"
+                          TintColor="{ThemeResource CardBackgroundFillColorDefault}"
+                          TintOpacity="0.65"
+                          FallbackColor="#1E293B" />
+
+            <AcrylicBrush x:Key="SidebarAcrylicBrush"
+                          TintColor="{ThemeResource SolidBackgroundFillColorBase}"
+                          TintOpacity="0.75"
+                          FallbackColor="#0F172A" />
+
+            <!-- Specular Light Reflection Border -->
+            <SolidColorBrush x:Key="SpecularLightBorderBrush" Color="#30FFFFFF" />
+            <SolidColorBrush x:Key="SpecularSubtleBorderBrush" Color="#18FFFFFF" />
+
+            <!-- Global TextBlock Styling (Zero-clipping Arabic vertical breathing room) -->
+            <Style TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="{StaticResource EAAFontFamily}" />
+                <Setter Property="TextAlignment" Value="Right" />
+            </Style>
+
+            <!-- High-End Glassmorphism Card Style -->
+            <Style x:Key="FluentCardBorder" TargetType="Border">
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource SpecularLightBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Padding" Value="18" />
+            </Style>
+
+            <!-- Status Pill Style -->
+            <Style x:Key="StatusPillBorder" TargetType="Border">
+                <Setter Property="CornerRadius" Value="6" />
+                <Setter Property="Padding" Value="10,4,10,4" />
+            </Style>
+
+            <!-- KPI Metric Card Style -->
+            <Style x:Key="MetricCardBorder" TargetType="Border">
+                <Setter Property="CornerRadius" Value="12" />
+                <Setter Property="Background" Value="{ThemeResource CardBackgroundFillColorDefaultBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource SpecularLightBorderBrush}" />
+                <Setter Property="BorderThickness" Value="1.2" />
+                <Setter Property="Padding" Value="20,16,20,18" />
+            </Style>
+
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

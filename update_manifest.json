@@ -1,0 +1,8 @@
+{
+  "version": "2.2.0",
+  "releaseDate": "2026-09-09",
+  "releaseNotes": "الإصدار التشغيلي الميداني الكامل - شاشة الإدخال الذكية المتغيرة، إتمام الكورسات، النسخ الاحتياطي الساخن، والمزامنة اللحظية مع الإكسيل.",
+  "releaseNotesEn": "Full two-way operational release - Dynamic smart entry form, 1-click course progression, hot SQLite snapshot backups, and real-time Excel mirroring.",
+  "deltaPatchUrl": "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.0/EAATrainingManager.exe",
+  "patchSizeBytes": 242030119
+}

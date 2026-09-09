@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentDialog
+    x:Class="EAATrainingManager.Dialogs.CompleteCourseDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="توثيق إنهاء الكورس التدريبي (إتمام الدورة)"
+    PrimaryButtonText="توثيق الإتمام وإنهاء التدريب ✓"
+    CloseButtonText="إلغاء"
+    DefaultButton="Primary"
+    PrimaryButtonClick="ContentDialog_PrimaryButtonClick">
+
+    <StackPanel Spacing="14" Padding="6" MinWidth="400">
+        <!-- Cadet Summary Header Card -->
+        <Border Style="{StaticResource FluentCardBorder}" Background="{ThemeResource LayerFillColorAltBrush}" Padding="12">
+            <StackPanel Spacing="6">
+                <TextBlock x:Name="TxtCadetInfo" Text="اسم المتدرب - البرنامج التدريبي" FontWeight="Bold" FontSize="14" />
+                <TextBlock x:Name="TxtOrderSummary" Text="أمر تدريب رقم # لسنة #" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Completion Date Picker -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="تاريخ إتمام التدريب الرسمي (تاريخ النهاية):" FontSize="12" FontWeight="SemiBold" />
+            <CalendarDatePicker x:Name="PickerCompletionDate" HorizontalAlignment="Stretch" />
+            <TextBlock Text="* سيتم تلقائياً تحويل حالة الأمر إلى 'منتهي' ونقل المتدرب في سجل القياس إلى 'خريج'." FontSize="11" Foreground="#198754" />
+        </StackPanel>
+
+        <!-- Completion Notes / Check-Ride -->
+        <StackPanel Spacing="4">
+            <TextBlock Text="ملاحظات اجتياز الاختبار / اعتماد سلطة الطيران:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <TextBox x:Name="TxtCompletionNotes" PlaceholderText="مثال: اجتاز اختبار الطيران العملي بنجاح، اعتمد من سلطة الطيران المدني" TextWrapping="Wrap" Height="60" />
+        </StackPanel>
+    </StackPanel>
+</ContentDialog>

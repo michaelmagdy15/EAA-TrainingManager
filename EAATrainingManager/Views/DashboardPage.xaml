@@ -1,0 +1,410 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Page
+    x:Class="EAATrainingManager.Views.DashboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:EAATrainingManager.Views"
+    xmlns:models="using:EAATrainingManager.Models"
+    xmlns:services="using:EAATrainingManager.Services"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid x:Name="PageRoot">
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup>
+                <VisualState x:Name="WideLayout">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="1050" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="CardStudents.(Grid.Row)" Value="0" />
+                        <Setter Target="CardStudents.(Grid.Column)" Value="0" />
+                        <Setter Target="CardOrders.(Grid.Row)" Value="0" />
+                        <Setter Target="CardOrders.(Grid.Column)" Value="1" />
+                        <Setter Target="CardActive.(Grid.Row)" Value="0" />
+                        <Setter Target="CardActive.(Grid.Column)" Value="2" />
+                        <Setter Target="CardGraduated.(Grid.Row)" Value="0" />
+                        <Setter Target="CardGraduated.(Grid.Column)" Value="3" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="NarrowLayout">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="CardStudents.(Grid.Row)" Value="0" />
+                        <Setter Target="CardStudents.(Grid.Column)" Value="0" />
+                        <Setter Target="CardOrders.(Grid.Row)" Value="0" />
+                        <Setter Target="CardOrders.(Grid.Column)" Value="1" />
+                        <Setter Target="CardActive.(Grid.Row)" Value="1" />
+                        <Setter Target="CardActive.(Grid.Column)" Value="0" />
+                        <Setter Target="CardGraduated.(Grid.Row)" Value="1" />
+                        <Setter Target="CardGraduated.(Grid.Column)" Value="1" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
+
+        <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,16,20,24">
+            <StackPanel Spacing="18">
+
+                <!-- EAA Directorate Header Banner -->
+                <Border Style="{StaticResource FluentCardBorder}" Background="{ThemeResource LayerFillColorDefaultBrush}" Padding="16,14,16,14">
+                    <Grid ColumnSpacing="14" RowSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Image Grid.Column="0"
+                               Source="Assets/EAA_Emblem_Transparent.png"
+                               Height="46"
+                               Stretch="Uniform"
+                               VerticalAlignment="Center"
+                               Margin="0,0,10,0" />
+
+                        <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                            <TextBlock x:Name="TxtHeaderSubtitle" 
+                                       Text="الكلية المصرية للطيران – إدارة التدريب" 
+                                       FontSize="12" 
+                                       Opacity="0.75" 
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock x:Name="TxtHeaderTitle" 
+                                       Text="لوحة المؤشرات والقياس العملياتي لأوامر التدريب" 
+                                       FontSize="20" 
+                                       FontWeight="Bold" 
+                                       Foreground="{ThemeResource TextFillColorPrimaryBrush}" 
+                                       TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="TxtHeaderDesc" 
+                                       Text="نظام حصر المتدربين الفعليين وفصل الرؤوس عن أوامر التدريب مع توحيد مسارات (PPL ➔ CPL/IR ➔ ATP)" 
+                                       FontSize="12" 
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+
+                        <!-- Action buttons and Year Selector in Column 2 -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" HorizontalAlignment="Left">
+                            <!-- Persistent Academic Year Selector -->
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtYearLabel" Text="السنة التدريبية:" Style="{StaticResource BodyTextBlockStyle}" VerticalAlignment="Center" />
+                                <ComboBox x:Name="YearSelector" 
+                                          Width="140" 
+                                          SelectedIndex="0" 
+                                          SelectionChanged="YearSelector_SelectionChanged">
+                                    <ComboBoxItem x:Name="ComboItemAllYears" Content="جميع السنوات" Tag="All" />
+                                    <ComboBoxItem Content="2026" Tag="2026" />
+                                    <ComboBoxItem Content="2025" Tag="2025" />
+                                    <ComboBoxItem Content="2024" Tag="2024" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <!-- Export Consular Roster Button -->
+                            <Button x:Name="BtnExportConsular" 
+                                    Click="BtnExportConsular_Click" 
+                                    ToolTipService.ToolTip="تصدير كشف الوافدين المعتمد للإدارة المركزية للطيران المدني"
+                                    Padding="12,8,12,8">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xEDE1;" FlowDirection="LeftToRight" FontSize="14" Foreground="#FD7E14" />
+                                    <TextBlock x:Name="TxtExportConsular" Text="كشف الوافدين" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Add New Order Button -->
+                            <Button x:Name="BtnAddOrder" 
+                                    Click="BtnAddOrder_Click" 
+                                    Style="{StaticResource AccentButtonStyle}"
+                                    Padding="12,8,12,8">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE710;" FlowDirection="LeftToRight" FontSize="14" />
+                                    <TextBlock x:Name="TxtBtnAddOrder" Text="أمر تدريب جديد" />
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Archive / Trash Bin Button -->
+                            <Button x:Name="BtnOpenArchive" 
+                                    Click="BtnOpenArchive_Click" 
+                                    ToolTipService.ToolTip="سلة المحذوفات وسجل الأرشيف"
+                                    Padding="10,8,10,8">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE74D;" FlowDirection="LeftToRight" FontSize="14" Foreground="#DC3545" />
+                                    <TextBlock x:Name="TxtBtnOpenArchive" Text="الأرشيف" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="BtnQuickImport" 
+                                    Click="BtnQuickImport_Click" 
+                                    Padding="12,8,12,8">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <FontIcon Glyph="&#xE898;" FlowDirection="LeftToRight" FontSize="14" />
+                                    <TextBlock x:Name="TxtQuickImport" Text="مزامنة سريعة" />
+                                </StackPanel>
+                            </Button>
+
+                            <Button x:Name="BtnRefresh" 
+                                    Click="BtnRefresh_Click"
+                                    ToolTipService.ToolTip="تحديث البيانات"
+                                    Padding="10,8,10,8">
+                                <FontIcon Glyph="&#xE72C;" FlowDirection="LeftToRight" FontSize="14" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Status bar message -->
+                <InfoBar x:Name="StatusInfoBar" IsOpen="True" Severity="Informational" Title="حالة النظام:" Message="جاري الاتصال بقاعدة البيانات المحلية..." />
+
+                <!-- Executive KPI Metric Cards (Total Students, International Trainees, Part 61, Part 141) -->
+                <Grid x:Name="KpiCardsGrid" ColumnSpacing="14" RowSpacing="14">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <!-- KPI 1: Unique Students (Headcount) -->
+                    <Border x:Name="CardStudents" Grid.Row="0" Grid.Column="0" Style="{StaticResource FluentCardBorder}" BorderBrush="#0D6EFD" BorderThickness="1.5">
+                        <StackPanel Spacing="6">
+                            <Grid>
+                                <TextBlock x:Name="TxtKpiStudentsTitle" Text="إجمالي الطلبة الفعليين" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                <Border HorizontalAlignment="Left" Style="{StaticResource StatusPillBorder}" Background="#E7F1FF">
+                                    <TextBlock x:Name="TxtKpiStudentsPill" Text="الرؤوس الفعلية" FontSize="10" FontWeight="Bold" Foreground="#0D6EFD" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="TxtTotalUniqueStudents" Text="0" FontSize="32" FontWeight="Bold" Foreground="#0D6EFD" Padding="0,2,0,4" />
+                            <TextBlock x:Name="TxtKpiStudentsDesc" Text="متدرب كشخص (مستقل عن تكرار الأوامر)" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- KPI 2: International Trainees Demographics -->
+                    <Border x:Name="CardOrders" Grid.Row="0" Grid.Column="1" Style="{StaticResource FluentCardBorder}" BorderBrush="#FD7E14" BorderThickness="1.5">
+                        <StackPanel Spacing="6">
+                            <Grid>
+                                <TextBlock x:Name="TxtKpiIntlTitle" Text="الطلبة الوافدون (أجانب وعرب)" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                <Border HorizontalAlignment="Left" Style="{StaticResource StatusPillBorder}" Background="#FFF3CD">
+                                    <TextBlock x:Name="TxtKpiIntlPill" Text="شؤون الوافدين" FontSize="10" FontWeight="Bold" Foreground="#856404" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="TxtInternationalStudents" Text="0" FontSize="32" FontWeight="Bold" Foreground="#FD7E14" Padding="0,2,0,4" />
+                            <TextBlock x:Name="TxtInternationalPercent" Text="0% من إجمالي الأكاديمية" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- KPI 3: Part 61 (النظام الحر) -->
+                    <Border x:Name="CardActive" Grid.Row="0" Grid.Column="2" Style="{StaticResource FluentCardBorder}" BorderBrush="#198754" BorderThickness="1.5">
+                        <StackPanel Spacing="6">
+                            <Grid>
+                                <TextBlock x:Name="TxtKpiPart61Title" Text="النظام الحر (Part 61)" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                <Border HorizontalAlignment="Left" Style="{StaticResource StatusPillBorder}" Background="#D1E7DD">
+                                    <TextBlock x:Name="TxtKpiPart61Pill" Text="نظام حر" FontSize="10" FontWeight="Bold" Foreground="#0F5132" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="TxtPart61Count" Text="0" FontSize="32" FontWeight="Bold" Foreground="#198754" Padding="0,2,0,4" />
+                            <TextBlock x:Name="TxtKpiPart61Desc" Text="أوامر تدريب نظام حر معتمد" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- KPI 4: Part 141 (النظام المعتمد / الدفعات) -->
+                    <Border x:Name="CardGraduated" Grid.Row="0" Grid.Column="3" Style="{StaticResource FluentCardBorder}" BorderBrush="#6F42C1" BorderThickness="1.5">
+                        <StackPanel Spacing="6">
+                            <Grid>
+                                <TextBlock x:Name="TxtKpiPart141Title" Text="النظام المعتمد (Part 141)" FontSize="13" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                <Border HorizontalAlignment="Left" Style="{StaticResource StatusPillBorder}" Background="#F2EAFF">
+                                    <TextBlock x:Name="TxtKpiPart141Pill" Text="دفعات نظامية" FontSize="10" FontWeight="Bold" Foreground="#6F42C1" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="TxtPart141Count" Text="0" FontSize="32" FontWeight="Bold" Foreground="#6F42C1" Padding="0,2,0,4" />
+                            <TextBlock x:Name="TxtKpiPart141Desc" Text="طلبة الدفعات والبرامج المعتمدة" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Milestones & Curriculum Normalization Breakdown -->
+                <Border Style="{StaticResource FluentCardBorder}">
+                    <StackPanel Spacing="14">
+                        <Grid ColumnSpacing="12" RowSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" 
+                                       x:Name="TxtMilestonesTitle"
+                                       Text="توزيع المتدربين حسب مراحل المنهج ومسارات الطيران (بدون احتساب مزدوج)" 
+                                       FontSize="15" 
+                                       FontWeight="Bold" 
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="1" 
+                                       x:Name="TxtMilestonesDesc"
+                                       Text="* يتم ضم الأوامر القديمة المنفصلة (CPL + IR) مع الأوامر المدمجة (CPL/IR)" 
+                                       FontSize="11" 
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                                       HorizontalAlignment="Left" 
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap" />
+                        </Grid>
+
+                        <ItemsControl x:Name="DistributionItemsControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Spacing="10" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:ProgramDistributionItem">
+                                    <Grid ColumnSpacing="14">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="200" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="130" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Text="{x:Bind ProgramName}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+
+                                        <ProgressBar Grid.Column="1" Value="{x:Bind Percentage}" Maximum="100" Height="8" VerticalAlignment="Center" />
+
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="4">
+                                            <TextBlock Text="{x:Bind UniqueStudentsCount}" FontWeight="Bold" />
+                                            <TextBlock Text="طالب فعلي" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- Nationality Breakdown & Recent Orders Grid (Side-by-Side) -->
+                <Grid ColumnSpacing="16" RowSpacing="16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="2*" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Student Quick Registry Table -->
+                    <Border Grid.Column="0" Style="{StaticResource FluentCardBorder}" Padding="0">
+                        <StackPanel Spacing="0">
+                            <Grid Padding="16,14,16,10">
+                                <TextBlock x:Name="TxtRecentOrdersTitle" Text="سجل أوامر التدريب الحديثة" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock x:Name="TxtRecentOrdersSubtitle" 
+                                           Text="أحدث السجلات المعالجة بالسنة المختارة" 
+                                           FontSize="11" 
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                                           HorizontalAlignment="Left" 
+                                           VerticalAlignment="Center" />
+                            </Grid>
+
+                            <ScrollViewer HorizontalScrollBarVisibility="Auto" 
+                                          VerticalScrollBarVisibility="Disabled" 
+                                          HorizontalScrollMode="Enabled" 
+                                          VerticalScrollMode="Disabled">
+                                <StackPanel MinWidth="750">
+                                    <!-- Table Header -->
+                                    <Border Background="{ThemeResource LayerFillColorAltBrush}" Padding="12,10,12,10">
+                                        <Grid ColumnSpacing="10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="45" />
+                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="1.5*" />
+                                                <ColumnDefinition Width="95" />
+                                                <ColumnDefinition Width="90" />
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBlock x:Name="ColHeaderSeq" Grid.Column="0" Text="م" FontWeight="Bold" TextAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderStudent" Grid.Column="1" Text="اسم المتدرب / الطالب" FontWeight="Bold" />
+                                            <TextBlock x:Name="ColHeaderNationality" Grid.Column="2" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderOrderNum" Grid.Column="3" Text="رقم الأمر" FontWeight="Bold" TextAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderTrack" Grid.Column="4" Text="المسار والمنهج" FontWeight="Bold" />
+                                            <TextBlock x:Name="ColHeaderDate" Grid.Column="5" Text="تاريخ الالتحاق" FontWeight="Bold" TextAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderStatus" Grid.Column="6" Text="الحالة" FontWeight="Bold" TextAlignment="Center" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Table Rows ListView -->
+                                    <ListView x:Name="RecentOrdersListView" SelectionMode="None" Height="310">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="models:TrainingOrder">
+                                                <Border Padding="4,6,4,6" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                                                    <Grid ColumnSpacing="10">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="45" />
+                                                            <ColumnDefinition Width="2*" />
+                                                            <ColumnDefinition Width="80" />
+                                                            <ColumnDefinition Width="90" />
+                                                            <ColumnDefinition Width="1.5*" />
+                                                            <ColumnDefinition Width="95" />
+                                                            <ColumnDefinition Width="90" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <TextBlock Grid.Column="0" Text="{x:Bind SequenceNumber}" TextAlignment="Center" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="1" Text="{x:Bind StudentDisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" Padding="0,2,0,4" />
+                                                        <Border Grid.Column="2" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{ThemeResource LayerFillColorAltBrush}">
+                                                            <TextBlock Text="{x:Bind Nationality}" FontSize="10" FontWeight="SemiBold" />
+                                                        </Border>
+                                                        <TextBlock Grid.Column="3" Text="{x:Bind OrderNumber}" TextAlignment="Center" FontWeight="Bold" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="4" Text="{x:Bind BiDiProgramType}" VerticalAlignment="Center" />
+                                                        <TextBlock Grid.Column="5" Text="{x:Bind FormattedEnrollmentDate}" TextAlignment="Center" VerticalAlignment="Center" />
+                                                        <Border Grid.Column="6" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{x:Bind StatusBadgeColor}">
+                                                            <TextBlock Text="{x:Bind Status}" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- International Trainees by Country List -->
+                    <Border Grid.Column="1" Style="{StaticResource FluentCardBorder}" Padding="16">
+                        <StackPanel Spacing="12">
+                            <Grid>
+                                <TextBlock x:Name="TxtNationalitiesTitle" Text="توزيع جنسيات الوافدين" FontSize="15" FontWeight="Bold" VerticalAlignment="Center" />
+                                <Border HorizontalAlignment="Left" Style="{StaticResource StatusPillBorder}" Background="#FFF3CD">
+                                    <TextBlock x:Name="TxtNationalitiesPill" Text="كثافة الدول" FontSize="10" FontWeight="Bold" Foreground="#856404" />
+                                </Border>
+                            </Grid>
+                            <TextBlock x:Name="TxtNationalitiesDesc" Text="بيان حصري بجنسيات وأعداد الطلبة الأجانب والعرب" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                            <ListView x:Name="NationalitiesListView" SelectionMode="None" Height="300">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="services:NationalityDistributionItem">
+                                        <Border Padding="4,6,4,6" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                                            <Grid ColumnSpacing="8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Grid.Column="0" Spacing="3">
+                                                    <TextBlock Text="{x:Bind CountryName}" FontWeight="SemiBold" FontSize="13" />
+                                                    <ProgressBar Value="{x:Bind Percentage}" Maximum="100" Height="4" Foreground="#FD7E14" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                    <TextBlock Text="{x:Bind StudentCount}" FontWeight="Bold" Foreground="#FD7E14" FontSize="14" />
+                                                    <TextBlock Text="طالب" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

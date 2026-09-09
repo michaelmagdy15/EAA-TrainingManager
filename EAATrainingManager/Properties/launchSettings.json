@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "EAATrainingManager (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "EAATrainingManager (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

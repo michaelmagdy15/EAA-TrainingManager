@@ -1,0 +1,259 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<Window
+    x:Class="EAATrainingManager.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:local="using:EAATrainingManager"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    Title="منظومة إدارة أوامر التدريب – الأكاديمية المصرية لعلوم الطيران"
+    mc:Ignorable="d">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <!-- Root Visual Tree with RTL Architecture -->
+    <Grid x:Name="RootGrid" FlowDirection="RightToLeft">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- TitleBar with EAA Official Branding & Language Switcher -->
+        <Grid Grid.Row="0">
+            <TitleBar x:Name="AppTitleBar" 
+                      Title="الأكاديمية المصرية لعلوم الطيران – الكلية المصرية للطيران – إدارة التدريب"
+                      Height="44">
+                <TitleBar.IconSource>
+                    <ImageIconSource ImageSource="Assets/StoreLogo.png" />
+                </TitleBar.IconSource>
+            </TitleBar>
+
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,12,0">
+                <!-- 1. Add New Order Modal Trigger -->
+                <Button x:Name="BtnTitleAddOrder"
+                        Click="BtnTitleAddOrder_Click"
+                        Style="{StaticResource AccentButtonStyle}"
+                        Padding="12,4"
+                        CornerRadius="14">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE710;" FontSize="12" FlowDirection="LeftToRight" />
+                        <TextBlock x:Name="TxtTitleAddOrder" Text="أمر تدريب جديد" FontWeight="Bold" FontSize="12" />
+                    </StackPanel>
+                </Button>
+
+                <!-- 2. Archive / Soft-Deleted Orders -->
+                <Button x:Name="BtnTitleArchive"
+                        Click="BtnTitleArchive_Click"
+                        Padding="10,4"
+                        CornerRadius="14"
+                        Background="{ThemeResource LayerFillColorAltBrush}"
+                        ToolTipService.ToolTip="سلة المحفوظات والأرشيف (سجلات الأمان)">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="#6C757D" FlowDirection="LeftToRight" />
+                        <TextBlock x:Name="TxtTitleArchive" Text="الأرشيف" FontWeight="SemiBold" FontSize="12" />
+                    </StackPanel>
+                </Button>
+
+                <!-- 3. Lightweight Delta Updater -->
+                <Button x:Name="BtnTitleUpdateCheck"
+                        Click="BtnTitleUpdateCheck_Click"
+                        Padding="10,4"
+                        CornerRadius="14"
+                        Background="{ThemeResource LayerFillColorAltBrush}"
+                        ToolTipService.ToolTip="التحقق من التحديثات الخفيفة (Delta Updater)">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE895;" FontSize="12" Foreground="#0D6EFD" FlowDirection="LeftToRight" />
+                        <TextBlock x:Name="TxtTitleUpdate" Text="تحديثات" FontWeight="SemiBold" FontSize="12" />
+                    </StackPanel>
+                </Button>
+
+                <!-- 4. Dynamic Language Switcher Toggle -->
+                <Button x:Name="BtnTitleLangToggle"
+                        Click="BtnLanguageToggle_Click"
+                        Padding="10,4"
+                        CornerRadius="14"
+                        Background="{ThemeResource LayerFillColorAltBrush}"
+                        ToolTipService.ToolTip="Switch Language / تغيير لغة المنظومة">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <FontIcon Glyph="&#xE774;" FontSize="13" Foreground="#0D6EFD" />
+                        <TextBlock x:Name="TxtTitleLangBadge" Text="English" FontWeight="Bold" FontSize="12" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Main Navigation View (Adaptive RTL Right-Docked) -->
+        <NavigationView x:Name="NavView" 
+                        Grid.Row="1" 
+                        PaneDisplayMode="Auto"
+                        CompactModeThresholdWidth="768"
+                        ExpandedModeThresholdWidth="1100"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        SelectionChanged="NavView_SelectionChanged"
+                        FlowDirection="RightToLeft">
+
+            <!-- Sidebar Header Branding -->
+            <NavigationView.PaneHeader>
+                <Border Margin="12,12,12,16" Padding="12" Style="{StaticResource FluentCardBorder}" Background="{ThemeResource LayerFillColorAltBrush}">
+                    <Grid ColumnSpacing="10">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Official EAA Emblem in Sidebar -->
+                        <Image Grid.Column="0" Source="Assets/StoreLogo.png" Width="36" Height="36" Stretch="Uniform" FlowDirection="LeftToRight" VerticalAlignment="Center" />
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+                            <TextBlock x:Name="TxtDirectorate" Text="إدارة التدريب" FontWeight="Bold" FontSize="14" />
+                            <TextBlock x:Name="TxtAcademy" Text="EAA Training Manager" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FlowDirection="LeftToRight" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </NavigationView.PaneHeader>
+
+            <!-- Navigation Menu Items -->
+            <NavigationView.MenuItems>
+                <NavigationViewItem x:Name="NavItemDashboard" Tag="Dashboard" Content="الرئيسية والمؤشرات" IsSelected="True">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE80F;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItemHeader x:Name="NavHeaderStreams" Content="المسارات التدريبية" />
+
+                <NavigationViewItem x:Name="NavItemPart61" Tag="Part61" Content="النظام الحر - 61 (Part 61)">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE709;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemPart141" Tag="Part141" Content="الدفعات المعتمدة - 141 (Part 141)">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE7BE;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemATP" Tag="ATP" Content="خط جوي - ATP">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE709;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemTypeRating" Tag="TypeRating" Content="تجديد طراز وبناء ساعات">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xEB42;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemEvaluation" Tag="Evaluation" Content="التقييم والمعادلات">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE73E;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItemSeparator />
+
+                <NavigationViewItem x:Name="NavItemStudents" Tag="Students" Content="سجل الطلبة والمتدربين">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE77B;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemOrders" Tag="Orders" Content="كافة أوامر التدريب">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8A5;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemExcelSync" Tag="ExcelSync" Content="استيراد وتصدير الذكي">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE8B5;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <!-- Footer: Language Switcher & 100% Offline System Indicator -->
+            <NavigationView.PaneFooter>
+                <StackPanel Margin="12,4,12,12" Spacing="8">
+                    <!-- Elegant Language Switcher Button -->
+                    <Button x:Name="BtnPaneLangToggle"
+                            Click="BtnLanguageToggle_Click"
+                            HorizontalAlignment="Stretch"
+                            Padding="10,8"
+                            CornerRadius="8"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Grid.Column="0" Glyph="&#xE774;" FontSize="15" Foreground="#0D6EFD" VerticalAlignment="Center" />
+                            <TextBlock Grid.Column="1" x:Name="TxtPaneLangLabel" Text="تغيير اللغة (English)" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                            <Border Grid.Column="2" Padding="6,2" CornerRadius="4" Background="#0D6EFD" VerticalAlignment="Center">
+                                <TextBlock x:Name="TxtPaneLangCode" Text="EN" FontSize="10" FontWeight="Bold" Foreground="White" />
+                            </Border>
+                        </Grid>
+                    </Button>
+
+                    <Border Padding="10" Style="{StaticResource StatusPillBorder}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+                            <Border Width="8" Height="8" CornerRadius="4" Background="#198754" VerticalAlignment="Center" />
+                            <TextBlock x:Name="TxtOfflineStatus" Text="نظام محلي يعمل 100% بدون إنترنت" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </NavigationView.PaneFooter>
+
+            <!-- Content Frame with Smooth Entrance Transitions -->
+            <Frame x:Name="ContentFrame">
+                <Frame.ContentTransitions>
+                    <TransitionCollection>
+                        <NavigationThemeTransition />
+                    </TransitionCollection>
+                </Frame.ContentTransitions>
+            </Frame>
+        </NavigationView>
+
+        <!-- Startup Loading Animation Overlay with Official EAA Emblem -->
+        <Grid x:Name="StartupLoadingOverlay"
+              Grid.Row="0"
+              Grid.RowSpan="2"
+              Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+              HorizontalAlignment="Stretch"
+              VerticalAlignment="Stretch"
+              Canvas.ZIndex="999">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="24">
+                <Image Source="Assets/EAA_Emblem_Transparent.png"
+                       Width="380"
+                       Stretch="Uniform"
+                       HorizontalAlignment="Center" />
+                <StackPanel Spacing="8" HorizontalAlignment="Center">
+                    <ProgressRing IsActive="True" Width="40" Height="40" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                    <TextBlock Text="الأكاديمية المصرية لعلوم الطيران"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center" />
+                    <TextBlock Text="الكلية المصرية للطيران – إدارة التدريب"
+                               FontSize="14"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center" />
+                    <TextBlock Text="جاري تهيئة قاعدة البيانات المحلية وفحص السجلات..."
+                               FontSize="12"
+                               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Margin="0,8,0,0" />
+                </StackPanel>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>
