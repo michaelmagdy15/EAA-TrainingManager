@@ -14,7 +14,7 @@ public class UpdateCheckResult
     public bool IsUpToDate { get; set; }
     public bool IsOffline { get; set; }
     public string CurrentVersion { get; set; } = "2.2.1";
-    public string LatestVersion { get; set; } = "2.2.3";
+    public string LatestVersion { get; set; } = "2.2.4";
     public double PatchSizeMb { get; set; } = 0.0;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
@@ -150,12 +150,20 @@ public class UpdateService
     {
         try
         {
+            string appDir = AppDomain.CurrentDomain.BaseDirectory.TrimEnd('\\');
+            string currentExePath = Environment.ProcessPath 
+                ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName 
+                ?? Path.Combine(appDir, "EAATrainingManager.exe");
+            int currentPid = Environment.ProcessId;
+            bool isModular = File.Exists(Path.Combine(appDir, "EAATrainingManager.dll"));
+
             statusCallback?.Invoke(LocalizationService.Instance.Text(
-                "جارٍ تحديد موقع ملف التحديث من المستودع السحابي...",
-                "Locating update binary asset in cloud release..."));
+                "جارٍ تحديد موقع حزمة التحديث من المستودع السحابي...",
+                "Locating update package in cloud release..."));
 
             string downloadDirectUrl = string.Empty;
             long expectedSize = 0;
+            bool isDeltaZip = false;
 
             if (!string.IsNullOrWhiteSpace(ReadOnlyToken))
             {
@@ -175,35 +183,62 @@ public class UpdateService
                 using var relDoc = JsonDocument.Parse(relJson);
                 if (relDoc.RootElement.TryGetProperty("assets", out var assets) && assets.GetArrayLength() > 0)
                 {
-                    foreach (var asset in assets.EnumerateArray())
+                    string chosenAssetApiUrl = string.Empty;
+
+                    // 1. If modular installation, prioritize lightweight delta zip patch (0.6 - 2 MB)
+                    if (isModular)
                     {
-                        string name = asset.GetProperty("name").GetString() ?? "";
-                        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                        foreach (var asset in assets.EnumerateArray())
                         {
-                            string assetApiUrl = asset.GetProperty("url").GetString()!;
-                            expectedSize = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
-
-                            // Request direct Azure/S3 download link via 302 Found redirect without following
-                            var noRedirectHandler = new HttpClientHandler { AllowAutoRedirect = false };
-                            using var noRedirectClient = new HttpClient(noRedirectHandler) { Timeout = TimeSpan.FromSeconds(30) };
-                            
-                            using var assetReq = new HttpRequestMessage(HttpMethod.Get, assetApiUrl);
-                            assetReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ReadOnlyToken);
-                            assetReq.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
-                            assetReq.Headers.UserAgent.ParseAdd("EAA-TrainingManager-Desktop");
-
-                            using var assetResp = await noRedirectClient.SendAsync(assetReq);
-                            if (assetResp.StatusCode == System.Net.HttpStatusCode.Found ||
-                                assetResp.StatusCode == System.Net.HttpStatusCode.Moved ||
-                                assetResp.StatusCode == System.Net.HttpStatusCode.SeeOther)
+                            string name = asset.GetProperty("name").GetString() ?? "";
+                            if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                                (name.Contains("Delta", StringComparison.OrdinalIgnoreCase) || name.Contains("patch", StringComparison.OrdinalIgnoreCase)))
                             {
-                                downloadDirectUrl = assetResp.Headers.Location?.ToString() ?? string.Empty;
+                                chosenAssetApiUrl = asset.GetProperty("url").GetString()!;
+                                expectedSize = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+                                isDeltaZip = true;
+                                break;
                             }
-                            else if (assetResp.IsSuccessStatusCode)
+                        }
+                    }
+
+                    // 2. Fallback to standalone .exe if not modular or delta zip not found
+                    if (string.IsNullOrWhiteSpace(chosenAssetApiUrl))
+                    {
+                        foreach (var asset in assets.EnumerateArray())
+                        {
+                            string name = asset.GetProperty("name").GetString() ?? "";
+                            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
                             {
-                                downloadDirectUrl = assetApiUrl;
+                                chosenAssetApiUrl = asset.GetProperty("url").GetString()!;
+                                expectedSize = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+                                isDeltaZip = false;
+                                break;
                             }
-                            break;
+                        }
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(chosenAssetApiUrl))
+                    {
+                        // Request direct Azure/S3 download link via 302 Found redirect without following
+                        var noRedirectHandler = new HttpClientHandler { AllowAutoRedirect = false };
+                        using var noRedirectClient = new HttpClient(noRedirectHandler) { Timeout = TimeSpan.FromSeconds(30) };
+                        
+                        using var assetReq = new HttpRequestMessage(HttpMethod.Get, chosenAssetApiUrl);
+                        assetReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ReadOnlyToken);
+                        assetReq.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
+                        assetReq.Headers.UserAgent.ParseAdd("EAA-TrainingManager-Desktop");
+
+                        using var assetResp = await noRedirectClient.SendAsync(assetReq);
+                        if (assetResp.StatusCode == System.Net.HttpStatusCode.Found ||
+                            assetResp.StatusCode == System.Net.HttpStatusCode.Moved ||
+                            assetResp.StatusCode == System.Net.HttpStatusCode.SeeOther)
+                        {
+                            downloadDirectUrl = assetResp.Headers.Location?.ToString() ?? string.Empty;
+                        }
+                        else if (assetResp.IsSuccessStatusCode)
+                        {
+                            downloadDirectUrl = chosenAssetApiUrl;
                         }
                     }
                 }
@@ -211,18 +246,23 @@ public class UpdateService
 
             if (string.IsNullOrWhiteSpace(downloadDirectUrl))
             {
-                // Fallback to standard public release asset download URL
-                downloadDirectUrl = $"https://github.com/{RepoOwner}/{RepoName}/releases/download/v{latestVersion}/EAATrainingManager.exe";
+                // Fallback to public release asset URL
+                downloadDirectUrl = isModular 
+                    ? $"https://github.com/{RepoOwner}/{RepoName}/releases/download/v{latestVersion}/EAA_Delta_Patch_v{latestVersion}.zip"
+                    : $"https://github.com/{RepoOwner}/{RepoName}/releases/download/v{latestVersion}/EAATrainingManager.exe";
             }
 
             statusCallback?.Invoke(LocalizationService.Instance.Text(
-                "جارٍ بدء تنزيل التحديث السحابي...",
-                "Initiating background package download..."));
+                isDeltaZip ? "جارٍ بدء تنزيل التحديث التفاضلي الخفيف (Delta Patch)..." : "جارٍ بدء تنزيل حزمة التحديث الكاملة...",
+                isDeltaZip ? "Initiating lightweight delta patch download..." : "Initiating package download..."));
 
-            string tempExePath = Path.Combine(Path.GetTempPath(), $"EAATrainingManager_Update_v{latestVersion}.exe");
-            if (File.Exists(tempExePath))
+            string tempFilePath = Path.Combine(Path.GetTempPath(), isDeltaZip 
+                ? $"EAATrainingManager_Delta_v{latestVersion}.zip" 
+                : $"EAATrainingManager_Update_v{latestVersion}.exe");
+
+            if (File.Exists(tempFilePath))
             {
-                try { File.Delete(tempExePath); } catch { }
+                try { File.Delete(tempFilePath); } catch { }
             }
 
             // Download binary stream cleanly without GitHub authorization header (compatible with Azure Blob / S3 SAS)
@@ -236,7 +276,7 @@ public class UpdateService
                 long totalBytes = response.Content.Headers.ContentLength ?? expectedSize;
 
                 using var contentStream = await response.Content.ReadAsStreamAsync();
-                using var fileStream = new FileStream(tempExePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+                using var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
 
                 var buffer = new byte[81920];
                 long totalBytesRead = 0;
@@ -250,8 +290,8 @@ public class UpdateService
                     int percentage = totalBytes > 0 ? (int)((totalBytesRead * 100) / totalBytes) : 0;
                     progressCallback?.Invoke(totalBytesRead, totalBytes, percentage);
 
-                    double readMb = Math.Round(totalBytesRead / (1024.0 * 1024.0), 1);
-                    double totalMb = totalBytes > 0 ? Math.Round(totalBytes / (1024.0 * 1024.0), 1) : readMb;
+                    double readMb = Math.Round(totalBytesRead / (1024.0 * 1024.0), 2);
+                    double totalMb = totalBytes > 0 ? Math.Round(totalBytes / (1024.0 * 1024.0), 2) : readMb;
 
                     statusCallback?.Invoke(LocalizationService.Instance.Text(
                         $"جارٍ تحميل حزمة التحديث: {readMb} ميجابايت من {totalMb} ميجابايت ({percentage}%)",
@@ -259,9 +299,10 @@ public class UpdateService
                 }
             }
 
-            // Verify downloaded binary exists and has non-trivial size (> 5 MB)
-            var downloadedInfo = new FileInfo(tempExePath);
-            if (!downloadedInfo.Exists || downloadedInfo.Length < 5 * 1024 * 1024)
+            // Verify downloaded binary exists and has non-trivial size
+            var downloadedInfo = new FileInfo(tempFilePath);
+            long minRequiredBytes = isDeltaZip ? (50 * 1024) : (5 * 1024 * 1024);
+            if (!downloadedInfo.Exists || downloadedInfo.Length < minRequiredBytes)
             {
                 throw new Exception("Downloaded update file is corrupt or incomplete.");
             }
@@ -270,16 +311,14 @@ public class UpdateService
                 "اكتمل التنزيل بنجاح! جارٍ تثبيت الإصدار وإعادة تشغيل المنظومة تلقائياً...",
                 "Download completed! Applying update and relaunching application..."));
 
-            // Get target current running executable path and PID
-            string currentExePath = Environment.ProcessPath 
-                ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName 
-                ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "EAATrainingManager.exe");
-
-            int currentPid = Environment.ProcessId;
-
             // Generate self-cleaning updater batch script
             string updaterBatchPath = Path.Combine(Path.GetTempPath(), "eaa_updater.bat");
-            string scriptContent = $@"@echo off
+            string scriptContent;
+
+            if (isDeltaZip)
+            {
+                // Extract lightweight delta patch over application folder
+                scriptContent = $@"@echo off
 timeout /t 1 /nobreak >nul
 :waitloop
 tasklist /fi ""PID eq {currentPid}"" 2>nul | find ""{currentPid}"" >nul
@@ -287,11 +326,30 @@ if not errorlevel 1 (
     timeout /t 1 /nobreak >nul
     goto waitloop
 )
-copy /y ""{tempExePath}"" ""{currentExePath}"" >nul
+tar -xf ""{tempFilePath}"" -C ""{appDir}"" 2>nul || powershell -NoProfile -Command ""Expand-Archive -Path '{tempFilePath}' -DestinationPath '{appDir}' -Force""
 start """" ""{currentExePath}""
-del ""{tempExePath}"" 2>nul
+del ""{tempFilePath}"" 2>nul
 del ""%~f0"" 2>nul
 ";
+            }
+            else
+            {
+                // Overwrite single executable
+                scriptContent = $@"@echo off
+timeout /t 1 /nobreak >nul
+:waitloop
+tasklist /fi ""PID eq {currentPid}"" 2>nul | find ""{currentPid}"" >nul
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto waitloop
+)
+copy /y ""{tempFilePath}"" ""{currentExePath}"" >nul
+start """" ""{currentExePath}""
+del ""{tempFilePath}"" 2>nul
+del ""%~f0"" 2>nul
+";
+            }
+
             File.WriteAllText(updaterBatchPath, scriptContent);
 
             // Launch background updater script

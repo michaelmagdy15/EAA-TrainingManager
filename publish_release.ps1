@@ -112,17 +112,25 @@ if (-not $Notes) {
 "@
 }
 
-# 3. Compile Executable (Self-Contained Single-File Binary)
+# 3. Compile Executables (Modular Runtime & Standalone Single-File)
 $PublishDir = Join-Path $ScriptRoot "Publish"
-$ExePath = Join-Path $PublishDir "EAATrainingManager.exe"
+$StandaloneDir = Join-Path $ScriptRoot "bin\standalone"
 $CsprojPath = Join-Path $ScriptRoot "EAATrainingManager\EAATrainingManager.csproj"
+$ExePath = Join-Path $StandaloneDir "EAATrainingManager.exe"
+$deltaZipPath = Join-Path $ScriptRoot "EAA_Delta_Patch_$Tag.zip"
 
 if (-not $SkipBuild) {
-    Write-Host "`n[1/6] Building and Publishing EAATrainingManager.exe..." -ForegroundColor Cyan
-    
-    dotnet publish $CsprojPath -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o $PublishDir
+    Write-Host "`n[1/6] Building Modular Runtime in $PublishDir..." -ForegroundColor Cyan
+    dotnet publish $CsprojPath -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=false -o $PublishDir
     if ($LASTEXITCODE -ne 0) {
-        Write-Error "dotnet publish failed with exit code $LASTEXITCODE"
+        Write-Error "dotnet publish (modular) failed with exit code $LASTEXITCODE"
+        exit 1
+    }
+
+    Write-Host "`n[1/6b] Building Compressed Standalone Executable in $StandaloneDir..." -ForegroundColor Cyan
+    dotnet publish $CsprojPath -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o $StandaloneDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "dotnet publish (standalone) failed with exit code $LASTEXITCODE"
         exit 1
     }
     Write-Host "  -> Compilation complete." -ForegroundColor Green
@@ -131,30 +139,39 @@ if (-not $SkipBuild) {
 }
 
 if (-not (Test-Path $ExePath)) {
-    Write-Error "Executable not found at: $ExePath"
+    Write-Error "Standalone Executable not found at: $ExePath"
     exit 1
 }
 
-# 4. Compute Binary Metrics (Size and SHA256)
+# 4. Generate Lightweight Delta Patch (0.6 - 2 MB)
+Write-Host "`n[2/6] Packaging Lightweight Delta Patch ($Tag)..." -ForegroundColor Cyan
+if (Test-Path $deltaZipPath) { Remove-Item $deltaZipPath -Force }
+Compress-Archive -Path "$PublishDir\EAATrainingManager.dll", "$PublishDir\EAATrainingManager.pri", "$PublishDir\EAATrainingManager.deps.json" -DestinationPath $deltaZipPath -Force
+
+$deltaItem = Get-Item $deltaZipPath
+$deltaSizeBytes = $deltaItem.Length
+$deltaSizeMb = [math]::Round($deltaSizeBytes / 1MB, 2)
+
 $exeItem = Get-Item $ExePath
 $fileSizeBytes = $exeItem.Length
 $sha256 = (Get-FileHash -Path $ExePath -Algorithm SHA256).Hash.ToLower()
 
-Write-Host "`n[2/6] Binary File Verified:" -ForegroundColor Cyan
-Write-Host "  Path: $ExePath" -ForegroundColor Gray
-Write-Host "  Size: $([math]::Round($fileSizeBytes / 1MB, 2)) MB ($fileSizeBytes bytes)" -ForegroundColor Gray
-Write-Host "  SHA256: $sha256" -ForegroundColor Gray
+Write-Host "  Delta Patch: $deltaZipPath ($deltaSizeMb MB / $deltaSizeBytes bytes)" -ForegroundColor Green
+Write-Host "  Standalone:  $ExePath ($([math]::Round($fileSizeBytes / 1MB, 2)) MB)" -ForegroundColor Gray
+Write-Host "  SHA256:      $sha256" -ForegroundColor Gray
 
-# Copy to root executable for immediate local use
-$rootExe = Join-Path $ScriptRoot "EAATrainingManager.exe"
+# Copy modular files to workspace root for instant high-speed delta updating
 try {
-    Copy-Item -Path $ExePath -Destination $rootExe -Force
-    Write-Host "  -> Updated local root executable: $rootExe" -ForegroundColor Green
+    Copy-Item -Path "$PublishDir\EAATrainingManager.exe" -Destination (Join-Path $ScriptRoot "EAATrainingManager.exe") -Force
+    Copy-Item -Path "$PublishDir\EAATrainingManager.dll" -Destination (Join-Path $ScriptRoot "EAATrainingManager.dll") -Force
+    Copy-Item -Path "$PublishDir\EAATrainingManager.pri" -Destination (Join-Path $ScriptRoot "EAATrainingManager.pri") -Force
+    Copy-Item -Path "$PublishDir\EAATrainingManager.deps.json" -Destination (Join-Path $ScriptRoot "EAATrainingManager.deps.json") -Force
+    Write-Host "  -> Updated local root with modular engine." -ForegroundColor Green
 } catch {
-    Write-Warning "Could not copy to root executable (it may be currently running)."
+    Write-Warning "Could not update root modular files (may be running): $_"
 }
 
-# 5. Update update_manifest.json
+# 5. Update update_manifest.json with True Delta Metrics
 Write-Host "`n[3/6] Updating update_manifest.json..." -ForegroundColor Cyan
 $todayDate = (Get-Date).ToString("yyyy-MM-dd")
 
@@ -167,19 +184,21 @@ if (Test-Path $ManifestPath) {
         }
     } catch { }
 }
-$notesEn = "Update v$Version - Enhanced UI layout, perfect table alignment, and automated continuous updater delivery."
+$notesEn = "Update v$Version - Enhanced UI layout, perfect table alignment, and lightweight delta updater."
 
 $manifestObj = [ordered]@{
     version = $Version
     releaseDate = $todayDate
     releaseNotes = $notesAr
     releaseNotesEn = $notesEn
-    deltaPatchUrl = "https://github.com/$GitHubRepo/releases/download/$Tag/EAATrainingManager.exe"
-    patchSizeBytes = $fileSizeBytes
+    deltaPatchUrl = "https://github.com/$GitHubRepo/releases/download/$Tag/EAA_Delta_Patch_$Tag.zip"
+    patchSizeBytes = $deltaSizeBytes
+    fullPackageUrl = "https://github.com/$GitHubRepo/releases/download/$Tag/EAATrainingManager.exe"
+    fullSizeBytes = $fileSizeBytes
 }
 $manifestContent = ($manifestObj | ConvertTo-Json -Depth 4) + "`n"
 [System.IO.File]::WriteAllText($ManifestPath, $manifestContent, [System.Text.Encoding]::UTF8)
-Write-Host "  -> Manifest updated for version $Version." -ForegroundColor Green
+Write-Host "  -> Manifest updated for version $Version with true delta size: $deltaSizeMb MB." -ForegroundColor Green
 
 # 6. Update EAATrainingManager.csproj Version Tags
 Write-Host "`n[4/6] Updating project version references..." -ForegroundColor Cyan
@@ -194,13 +213,13 @@ $updateServicePath = Join-Path $ScriptRoot "EAATrainingManager\Services\UpdateSe
 if (Test-Path $updateServicePath) {
     $serviceContent = [System.IO.File]::ReadAllText($updateServicePath, [System.Text.Encoding]::UTF8)
     $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string CurrentVersion \{ get; \} = ".*?";', 'public string CurrentVersion { get; } = "' + $Version + '";')
-    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string LatestVersion \{ get; set; \} = ".*?";', 'public string LatestVersion { get; set; } = "' + $Version + '";')
+    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string LatestVersion \{ get; set; } = ".*?";', 'public string LatestVersion { get; set; } = "' + $Version + '";')
     [System.IO.File]::WriteAllText($updateServicePath, $serviceContent, [System.Text.Encoding]::UTF8)
 }
 Write-Host "  -> Project files updated to version $Version." -ForegroundColor Green
 
 # 8. Create / Update Standalone ZIP Archive
-Write-Host "`n[5/6] Creating Standalone Zip Archive..." -ForegroundColor Cyan
+Write-Host "`n[5/6] Creating Full Standalone Zip Archive..." -ForegroundColor Cyan
 $zipPath = Join-Path $ScriptRoot "EAA_Training_Manager_Standalone.zip"
 try {
     Compress-Archive -Path "$PublishDir\*" -DestinationPath $zipPath -Force
@@ -217,7 +236,7 @@ git add -A
 $gitStatus = git status --porcelain
 if ($gitStatus) {
     Write-Host "  -> Committing changes..." -ForegroundColor Gray
-    git commit -m "chore(release): bump version to $Tag and optimize UI layout"
+    git commit -m "chore(release): bump version to $Tag with lightweight delta patch"
     Write-Host "  -> Pushing to origin main..." -ForegroundColor Gray
     git push origin main
 } else {
@@ -225,7 +244,7 @@ if ($gitStatus) {
 }
 
 # 10. Create GitHub Release & Upload Binary via gh CLI
-Write-Host "  -> Creating GitHub Release $Tag and Uploading Binary..." -ForegroundColor Cyan
+Write-Host "  -> Creating GitHub Release $Tag and Uploading Delta Patch & Binaries..." -ForegroundColor Cyan
 $tempNotesFile = [System.IO.Path]::GetTempFileName()
 [System.IO.File]::WriteAllText($tempNotesFile, $Notes, [System.Text.Encoding]::UTF8)
 
@@ -237,27 +256,26 @@ try {
 
     $uploadSuccess = $false
     if ($releaseExists) {
-        Write-Host "  -> Release $Tag exists. Uploading/overwriting EAATrainingManager.exe asset..." -ForegroundColor Yellow
-        $out = & gh release upload $Tag $ExePath --repo $GitHubRepo --clobber 2>&1
+        Write-Host "  -> Release $Tag exists. Uploading/overwriting assets..." -ForegroundColor Yellow
+        $out = & gh release upload $Tag $deltaZipPath $ExePath $zipPath --repo $GitHubRepo --clobber 2>&1
         $uploadSuccess = ($LASTEXITCODE -eq 0)
     } else {
         Write-Host "  -> Creating fresh release $Tag..." -ForegroundColor Gray
-        $out = & gh release create $Tag $ExePath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest 2>&1
+        $out = & gh release create $Tag $deltaZipPath $ExePath $zipPath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest 2>&1
         $uploadSuccess = ($LASTEXITCODE -eq 0)
     }
     $ErrorActionPreference = $prevEAP
 
     if ($uploadSuccess) {
-        Write-Host "  -> Release $Tag uploaded and marked as Latest!" -ForegroundColor Green
+        Write-Host "  -> Release $Tag uploaded with Delta Patch ($deltaSizeMb MB) and marked as Latest!" -ForegroundColor Green
     } else {
         Write-Host "`n[!] GitHub CLI reported: $out" -ForegroundColor Yellow
         Write-Host "`nTo enable fully automated 0-click uploads, authorize gh CLI once by running:" -ForegroundColor Cyan
         Write-Host "    gh auth login --web" -ForegroundColor White
-        Write-Host "or add 'Contents: Read and write' permission to your fine-grained token." -ForegroundColor Gray
         
         Write-Host "`nOpening release page and highlighting binary for quick drop..." -ForegroundColor Cyan
         Start-Process "https://github.com/$GitHubRepo/releases/new?tag=$Tag&title=$([Uri]::EscapeDataString($Title))"
-        Start-Process "explorer.exe" -ArgumentList "/select,`"$ExePath`""
+        Start-Process "explorer.exe" -ArgumentList "/select,`"$deltaZipPath`""
     }
 } finally {
     if (Test-Path $tempNotesFile) { Remove-Item $tempNotesFile -Force }

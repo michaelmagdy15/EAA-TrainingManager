@@ -1,8 +1,10 @@
 ﻿{
-    "version":  "2.2.3",
+    "version":  "2.2.4",
     "releaseDate":  "2026-09-10",
-    "releaseNotes":  "تحديث v2.2.3 - دعم المصادقة التلقائية للتحديثات عبر المستودعات الخاصة، وتحسين استقرار المزامنة المرآتية للإكسيل.",
-    "releaseNotesEn":  "Update v2.2.3 - Enhanced UI layout, perfect table alignment, and automated continuous updater delivery.",
-    "deltaPatchUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.3/EAATrainingManager.exe",
-    "patchSizeBytes":  242047735
+    "releaseNotes":  "تحديث v2.2.4 - دعم المصادقة التلقائية للتحديثات عبر المستودعات الخاصة، وتحسين استقرار المزامنة المرآتية للإكسيل.",
+    "releaseNotesEn":  "Update v2.2.4 - Enhanced UI layout, perfect table alignment, and lightweight delta updater.",
+    "deltaPatchUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.4/EAA_Delta_Patch_v2.2.4.zip",
+    "patchSizeBytes":  705515,
+    "fullPackageUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.4/EAATrainingManager.exe",
+    "fullSizeBytes":  98670658
 }
