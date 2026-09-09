@@ -211,16 +211,31 @@ try {
     $ErrorActionPreference = "SilentlyContinue"
     & gh release view $Tag --repo $GitHubRepo 2>$null
     $releaseExists = ($LASTEXITCODE -eq 0)
-    $ErrorActionPreference = $prevEAP
 
+    $uploadSuccess = $false
     if ($releaseExists) {
         Write-Host "  -> Release $Tag exists. Uploading/overwriting EAATrainingManager.exe asset..." -ForegroundColor Yellow
-        & gh release upload $Tag $ExePath --repo $GitHubRepo --clobber
+        $out = & gh release upload $Tag $ExePath --repo $GitHubRepo --clobber 2>&1
+        $uploadSuccess = ($LASTEXITCODE -eq 0)
     } else {
         Write-Host "  -> Creating fresh release $Tag..." -ForegroundColor Gray
-        & gh release create $Tag $ExePath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest
+        $out = & gh release create $Tag $ExePath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest 2>&1
+        $uploadSuccess = ($LASTEXITCODE -eq 0)
     }
-    Write-Host "  -> Release $Tag uploaded and marked as Latest!" -ForegroundColor Green
+    $ErrorActionPreference = $prevEAP
+
+    if ($uploadSuccess) {
+        Write-Host "  -> Release $Tag uploaded and marked as Latest!" -ForegroundColor Green
+    } else {
+        Write-Host "`n[!] GitHub CLI reported: $out" -ForegroundColor Yellow
+        Write-Host "`nTo enable fully automated 0-click uploads, authorize gh CLI once by running:" -ForegroundColor Cyan
+        Write-Host "    gh auth login --web" -ForegroundColor White
+        Write-Host "or add 'Contents: Read and write' permission to your fine-grained token." -ForegroundColor Gray
+        
+        Write-Host "`nOpening release page and highlighting binary for quick drop..." -ForegroundColor Cyan
+        Start-Process "https://github.com/$GitHubRepo/releases/new?tag=$Tag&title=$([Uri]::EscapeDataString($Title))"
+        Start-Process "explorer.exe" -ArgumentList "/select,`"$ExePath`""
+    }
 } finally {
     if (Test-Path $tempNotesFile) { Remove-Item $tempNotesFile -Force }
 }
