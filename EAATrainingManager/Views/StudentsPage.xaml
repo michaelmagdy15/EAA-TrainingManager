@@ -97,22 +97,22 @@
                         <Border Background="{ThemeResource LayerFillColorAltBrush}" Padding="16,10,16,10">
                             <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="60" />
-                                    <ColumnDefinition Width="2.5*" />
-                                    <ColumnDefinition Width="80" />
+                                    <ColumnDefinition Width="65" />
+                                    <ColumnDefinition Width="2.8*" />
                                     <ColumnDefinition Width="90" />
-                                    <ColumnDefinition Width="100" />
+                                    <ColumnDefinition Width="90" />
+                                    <ColumnDefinition Width="120" />
                                     <ColumnDefinition Width="2*" />
-                                    <ColumnDefinition Width="110" />
+                                    <ColumnDefinition Width="120" />
                                 </Grid.ColumnDefinitions>
 
-                                <TextBlock x:Name="ColCode" Grid.Column="0" Text="كود" FontWeight="Bold" TextAlignment="Center" />
-                                <TextBlock x:Name="ColName" Grid.Column="1" Text="اسم المتدرب" FontWeight="Bold" />
-                                <TextBlock x:Name="ColNat" Grid.Column="2" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" />
-                                <TextBlock x:Name="ColOrders" Grid.Column="3" Text="الأوامر" FontWeight="Bold" TextAlignment="Center" />
-                                <TextBlock x:Name="ColStatus" Grid.Column="4" Text="الحالة" FontWeight="Bold" TextAlignment="Center" />
-                                <TextBlock x:Name="ColMilestones" Grid.Column="5" Text="المراحل المجتازة" FontWeight="Bold" />
-                                <TextBlock x:Name="ColTrajectoryHeader" Grid.Column="6" Text="المسار 360°" FontWeight="Bold" TextAlignment="Center" />
+                                <TextBlock x:Name="ColCode" Grid.Column="0" Text="كود" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ColName" Grid.Column="1" Text="اسم المتدرب" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ColNat" Grid.Column="2" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ColOrders" Grid.Column="3" Text="الأوامر" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ColStatus" Grid.Column="4" Text="الحالة" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ColMilestones" Grid.Column="5" Text="المراحل المجتازة" FontWeight="Bold" VerticalAlignment="Center" />
+                                <TextBlock x:Name="ColTrajectoryHeader" Grid.Column="6" Text="المسار 360°" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
                             </Grid>
                         </Border>
 
@@ -121,18 +121,26 @@
                                   Grid.Row="1" 
                                   SelectionMode="Single"
                                   SelectionChanged="StudentsListView_SelectionChanged">
+                            <ListView.ItemContainerStyle>
+                                <Style TargetType="ListViewItem">
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                    <Setter Property="Padding" Value="0" />
+                                    <Setter Property="Margin" Value="0" />
+                                    <Setter Property="MinHeight" Value="48" />
+                                </Style>
+                            </ListView.ItemContainerStyle>
                             <ListView.ItemTemplate>
                                 <DataTemplate x:DataType="models:Student">
-                                    <Border Padding="8,8,8,8" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                                    <Border Padding="16,8,16,8" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                                         <Grid ColumnSpacing="12">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="60" />
-                                                <ColumnDefinition Width="2.5*" />
-                                                <ColumnDefinition Width="80" />
+                                                <ColumnDefinition Width="65" />
+                                                <ColumnDefinition Width="2.8*" />
                                                 <ColumnDefinition Width="90" />
-                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="120" />
                                                 <ColumnDefinition Width="2*" />
-                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="120" />
                                             </Grid.ColumnDefinitions>
 
                                             <TextBlock Grid.Column="0" Text="{x:Bind Id}" TextAlignment="Center" VerticalAlignment="Center" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
@@ -140,26 +148,28 @@
                                             <TextBlock Grid.Column="2" Text="{x:Bind Nationality}" TextAlignment="Center" VerticalAlignment="Center" />
                                             
                                             <!-- Orders count pill -->
-                                            <Border Grid.Column="3" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{ThemeResource LayerFillColorDefaultBrush}">
+                                            <Border Grid.Column="3" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{ThemeResource LayerFillColorDefaultBrush}" Padding="8,3">
                                                 <TextBlock Text="{x:Bind TotalOrdersCount}" FontSize="12" FontWeight="Bold" />
                                             </Border>
 
                                             <!-- Overall Status Pill -->
-                                            <Border Grid.Column="4" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{x:Bind StatusBadgeColor}">
+                                            <Border Grid.Column="4" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{x:Bind StatusBadgeColor}" Padding="10,4">
                                                 <TextBlock Text="{x:Bind OverallStatus}" FontSize="11" FontWeight="Bold" Foreground="White" />
                                             </Border>
 
                                             <!-- Milestones Summary -->
-                                            <TextBlock Grid.Column="5" Text="{x:Bind MilestonesSummary}" VerticalAlignment="Center" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Grid.Column="5" Text="{x:Bind MilestonesSummary}" VerticalAlignment="Center" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
 
                                             <!-- Inspect Trajectory Button -->
                                             <Button Grid.Column="6" 
-                                                    Content="عرض المسار" 
+                                                    Content="{x:Bind TrajectoryButtonText}" 
                                                     Click="BtnViewTrajectory_Click" 
                                                     Tag="{x:Bind}" 
                                                     HorizontalAlignment="Center" 
-                                                    Padding="10,4,10,4" 
-                                                    FontSize="11" />
+                                                    VerticalAlignment="Center"
+                                                    Padding="12,5" 
+                                                    FontSize="11"
+                                                    CornerRadius="6" />
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

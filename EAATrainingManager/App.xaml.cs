@@ -8,6 +8,13 @@ namespace EAATrainingManager;
 public partial class App : Application
 {
     private Window? _window;
+    private static System.Threading.Mutex? _singleInstanceMutex;
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
     public static DatabaseService DatabaseService { get; } = new();
     public static ExcelSyncService ExcelSyncService { get; } = new(DatabaseService);
@@ -17,6 +24,17 @@ public partial class App : Application
 
     public App()
     {
+        // 1. Single-Instance Guard: Prevent launching duplicate copies
+        const string mutexName = "Global\\EAATrainingManager_SingleInstance_Mutex";
+        _singleInstanceMutex = new System.Threading.Mutex(true, mutexName, out bool isNewInstance);
+        if (!isNewInstance)
+        {
+            // Another instance is already running - bring it to focus and exit
+            BringExistingInstanceToFront();
+            Environment.Exit(0);
+            return;
+        }
+
         // Egyptian Civil Aviation Thread Culture (Western Arabic Numerals 1, 2, 3)
         var culture = new CultureInfo("ar-EG");
         culture.NumberFormat.DigitSubstitution = DigitShapes.None; // Enforces 1, 2, 3 instead of ١, ٢, ٣
@@ -40,7 +58,6 @@ public partial class App : Application
         };
 
         InitializeComponent();
-        EnsureMainWindow();
     }
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
@@ -53,5 +70,24 @@ public partial class App : Application
         if (_window != null) return;
         _window = new MainWindow();
         _window.Activate();
+    }
+
+    private static void BringExistingInstanceToFront()
+    {
+        try
+        {
+            var currentProcess = System.Diagnostics.Process.GetCurrentProcess();
+            var processes = System.Diagnostics.Process.GetProcessesByName(currentProcess.ProcessName);
+            foreach (var p in processes)
+            {
+                if (p.Id != currentProcess.Id && p.MainWindowHandle != IntPtr.Zero)
+                {
+                    ShowWindow(p.MainWindowHandle, 9); // SW_RESTORE = 9
+                    SetForegroundWindow(p.MainWindowHandle);
+                    return;
+                }
+            }
+        }
+        catch { }
     }
 }

@@ -265,13 +265,13 @@
                                             <ColumnDefinition Width="130" />
                                         </Grid.ColumnDefinitions>
 
-                                        <TextBlock Text="{x:Bind ProgramName}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Text="{x:Bind BiDiProgramName}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
 
                                         <ProgressBar Grid.Column="1" Value="{x:Bind Percentage}" Maximum="100" Height="8" VerticalAlignment="Center" />
 
-                                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Left" Spacing="4">
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="4" VerticalAlignment="Center">
                                             <TextBlock Text="{x:Bind UniqueStudentsCount}" FontWeight="Bold" />
-                                            <TextBlock Text="طالب فعلي" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Text="{x:Bind TraineeUnitLabel}" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                                         </StackPanel>
                                     </Grid>
                                 </DataTemplate>
@@ -306,42 +306,50 @@
                                           VerticalScrollMode="Disabled">
                                 <StackPanel MinWidth="750">
                                     <!-- Table Header -->
-                                    <Border Background="{ThemeResource LayerFillColorAltBrush}" Padding="12,10,12,10">
+                                    <Border Background="{ThemeResource LayerFillColorAltBrush}" Padding="14,10,14,10">
                                         <Grid ColumnSpacing="10">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="45" />
-                                                <ColumnDefinition Width="2*" />
+                                                <ColumnDefinition Width="2.2*" />
                                                 <ColumnDefinition Width="80" />
-                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="85" />
                                                 <ColumnDefinition Width="1.5*" />
                                                 <ColumnDefinition Width="95" />
-                                                <ColumnDefinition Width="90" />
+                                                <ColumnDefinition Width="95" />
                                             </Grid.ColumnDefinitions>
 
-                                            <TextBlock x:Name="ColHeaderSeq" Grid.Column="0" Text="م" FontWeight="Bold" TextAlignment="Center" />
-                                            <TextBlock x:Name="ColHeaderStudent" Grid.Column="1" Text="اسم المتدرب / الطالب" FontWeight="Bold" />
-                                            <TextBlock x:Name="ColHeaderNationality" Grid.Column="2" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" />
-                                            <TextBlock x:Name="ColHeaderOrderNum" Grid.Column="3" Text="رقم الأمر" FontWeight="Bold" TextAlignment="Center" />
-                                            <TextBlock x:Name="ColHeaderTrack" Grid.Column="4" Text="المسار والمنهج" FontWeight="Bold" />
-                                            <TextBlock x:Name="ColHeaderDate" Grid.Column="5" Text="تاريخ الالتحاق" FontWeight="Bold" TextAlignment="Center" />
-                                            <TextBlock x:Name="ColHeaderStatus" Grid.Column="6" Text="الحالة" FontWeight="Bold" TextAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderSeq" Grid.Column="0" Text="م" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderStudent" Grid.Column="1" Text="اسم المتدرب / الطالب" FontWeight="Bold" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderNationality" Grid.Column="2" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderOrderNum" Grid.Column="3" Text="رقم الأمر" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderTrack" Grid.Column="4" Text="المسار والمنهج" FontWeight="Bold" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderDate" Grid.Column="5" Text="تاريخ الالتحاق" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                                            <TextBlock x:Name="ColHeaderStatus" Grid.Column="6" Text="الحالة" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
                                         </Grid>
                                     </Border>
 
                                     <!-- Table Rows ListView -->
                                     <ListView x:Name="RecentOrdersListView" SelectionMode="None" Height="310">
+                                        <ListView.ItemContainerStyle>
+                                            <Style TargetType="ListViewItem">
+                                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                                <Setter Property="Padding" Value="0" />
+                                                <Setter Property="Margin" Value="0" />
+                                                <Setter Property="MinHeight" Value="42" />
+                                            </Style>
+                                        </ListView.ItemContainerStyle>
                                         <ListView.ItemTemplate>
                                             <DataTemplate x:DataType="models:TrainingOrder">
-                                                <Border Padding="4,6,4,6" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                                                <Border Padding="14,6,14,6" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                                                     <Grid ColumnSpacing="10">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="45" />
-                                                            <ColumnDefinition Width="2*" />
+                                                            <ColumnDefinition Width="2.2*" />
                                                             <ColumnDefinition Width="80" />
-                                                            <ColumnDefinition Width="90" />
+                                                            <ColumnDefinition Width="85" />
                                                             <ColumnDefinition Width="1.5*" />
                                                             <ColumnDefinition Width="95" />
-                                                            <ColumnDefinition Width="90" />
+                                                            <ColumnDefinition Width="95" />
                                                         </Grid.ColumnDefinitions>
 
                                                         <TextBlock Grid.Column="0" Text="{x:Bind SequenceNumber}" TextAlignment="Center" VerticalAlignment="Center" />

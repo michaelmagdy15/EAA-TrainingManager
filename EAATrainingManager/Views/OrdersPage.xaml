@@ -137,45 +137,53 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="50" />
                                 <ColumnDefinition Width="90" />
-                                <ColumnDefinition Width="2*" />
-                                <ColumnDefinition Width="75" />
+                                <ColumnDefinition Width="2.2*" />
+                                <ColumnDefinition Width="80" />
                                 <ColumnDefinition Width="1.5*" />
                                 <ColumnDefinition Width="105" />
                                 <ColumnDefinition Width="105" />
                                 <ColumnDefinition Width="95" />
-                                <ColumnDefinition Width="165" />
+                                <ColumnDefinition Width="175" />
                                 <ColumnDefinition Width="1.5*" />
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock x:Name="ColSeq" Grid.Column="0" Text="م" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColOrderNum" Grid.Column="1" Text="رقم الأمر" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColStudentName" Grid.Column="2" Text="اسم المتدرب / الطالب" FontWeight="Bold" />
-                            <TextBlock x:Name="ColNationality" Grid.Column="3" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColProgram" Grid.Column="4" Text="البرنامج / المنهج" FontWeight="Bold" />
-                            <TextBlock x:Name="ColEnrollDate" Grid.Column="5" Text="الالتحاق" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColEndDate" Grid.Column="6" Text="النهاية" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColStatus" Grid.Column="7" Text="الحالة" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColAction" Grid.Column="8" Text="الإجراءات" FontWeight="Bold" TextAlignment="Center" />
-                            <TextBlock x:Name="ColNotes" Grid.Column="9" Text="ملاحظات" FontWeight="Bold" />
+                            <TextBlock x:Name="ColSeq" Grid.Column="0" Text="م" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColOrderNum" Grid.Column="1" Text="رقم الأمر" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColStudentName" Grid.Column="2" Text="اسم المتدرب / الطالب" FontWeight="Bold" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColNationality" Grid.Column="3" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColProgram" Grid.Column="4" Text="البرنامج / المنهج" FontWeight="Bold" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColEnrollDate" Grid.Column="5" Text="الالتحاق" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColEndDate" Grid.Column="6" Text="النهاية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColStatus" Grid.Column="7" Text="الحالة" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColAction" Grid.Column="8" Text="الإجراءات" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColNotes" Grid.Column="9" Text="ملاحظات" FontWeight="Bold" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
 
                     <!-- Orders ListView -->
                     <ListView x:Name="OrdersListView" Grid.Row="1" SelectionMode="None">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                <Setter Property="Padding" Value="0" />
+                                <Setter Property="Margin" Value="0" />
+                                <Setter Property="MinHeight" Value="48" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
                             <DataTemplate x:DataType="models:TrainingOrder">
-                                <Border Padding="6,6,6,6" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+                                <Border Padding="16,6,16,6" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                                     <Grid ColumnSpacing="10">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="50" />
                                             <ColumnDefinition Width="90" />
-                                            <ColumnDefinition Width="2*" />
-                                            <ColumnDefinition Width="75" />
+                                            <ColumnDefinition Width="2.2*" />
+                                            <ColumnDefinition Width="80" />
                                             <ColumnDefinition Width="1.5*" />
                                             <ColumnDefinition Width="105" />
                                             <ColumnDefinition Width="105" />
                                             <ColumnDefinition Width="95" />
-                                            <ColumnDefinition Width="165" />
+                                            <ColumnDefinition Width="175" />
                                             <ColumnDefinition Width="1.5*" />
                                         </Grid.ColumnDefinitions>
 
@@ -193,23 +201,26 @@
                                         </Border>
 
                                         <!-- Multi-Action Bar -->
-                                        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <Button Tag="{x:Bind}" 
                                                     Click="BtnCompleteOrder_Click" 
-                                                    Padding="6,4" 
+                                                    Padding="7,5" 
+                                                    CornerRadius="6"
                                                     Style="{StaticResource AccentButtonStyle}"
                                                     ToolTipService.ToolTip="توثيق إتمام الكورس">
                                                 <FontIcon Glyph="&#xE73E;" FontSize="11" FlowDirection="LeftToRight" />
                                             </Button>
                                             <Button Tag="{x:Bind}" 
                                                     Click="BtnToggleStatus_Click" 
-                                                    Padding="6,4" 
+                                                    Padding="8,5" 
+                                                    CornerRadius="6"
                                                     FontSize="11">
                                                 <TextBlock Text="{x:Bind ToggleButtonText}" />
                                             </Button>
                                             <Button Tag="{x:Bind}" 
                                                     Click="BtnArchiveOrder_Click" 
-                                                    Padding="6,4" 
+                                                    Padding="7,5" 
+                                                    CornerRadius="6"
                                                     ToolTipService.ToolTip="أرشفة السجل إلى سلة الأمان">
                                                 <FontIcon Glyph="&#xE74D;" FontSize="11" Foreground="#DC3545" FlowDirection="LeftToRight" />
                                             </Button>

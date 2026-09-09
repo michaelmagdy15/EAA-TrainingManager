@@ -20,69 +20,89 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- TitleBar with EAA Official Branding & Language Switcher -->
-        <Grid Grid.Row="0">
-            <TitleBar x:Name="AppTitleBar" 
-                      Title="الأكاديمية المصرية لعلوم الطيران – الكلية المصرية للطيران – إدارة التدريب"
-                      Height="44">
-                <TitleBar.IconSource>
-                    <ImageIconSource ImageSource="Assets/StoreLogo.png" />
-                </TitleBar.IconSource>
-            </TitleBar>
+        <!-- Header Bar with Official EAA Branding & Quick Action Buttons (Never Overlaps!) -->
+        <Border Grid.Row="0" 
+                Height="48" 
+                Background="{ThemeResource LayerFillColorDefaultBrush}" 
+                BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                BorderThickness="0,0,0,1" 
+                Padding="16,0,16,0">
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
 
-            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,12,0">
-                <!-- 1. Add New Order Modal Trigger -->
-                <Button x:Name="BtnTitleAddOrder"
-                        Click="BtnTitleAddOrder_Click"
-                        Style="{StaticResource AccentButtonStyle}"
-                        Padding="12,4"
-                        CornerRadius="14">
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <FontIcon Glyph="&#xE710;" FontSize="12" FlowDirection="LeftToRight" />
-                        <TextBlock x:Name="TxtTitleAddOrder" Text="أمر تدريب جديد" FontWeight="Bold" FontSize="12" />
-                    </StackPanel>
-                </Button>
+                <!-- Left / Start: Official Logo & Directorate Title -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Image Source="Assets/StoreLogo.png" Width="26" Height="26" Stretch="Uniform" VerticalAlignment="Center" />
+                    <TextBlock x:Name="TxtAppTitle" 
+                               Text="الأكاديمية المصرية لعلوم الطيران – الكلية المصرية للطيران – إدارة التدريب" 
+                               FontWeight="SemiBold" 
+                               FontSize="13" 
+                               VerticalAlignment="Center" 
+                               TextTrimming="CharacterEllipsis" 
+                               MaxWidth="600" />
+                </StackPanel>
 
-                <!-- 2. Archive / Soft-Deleted Orders -->
-                <Button x:Name="BtnTitleArchive"
-                        Click="BtnTitleArchive_Click"
-                        Padding="10,4"
-                        CornerRadius="14"
-                        Background="{ThemeResource LayerFillColorAltBrush}"
-                        ToolTipService.ToolTip="سلة المحفوظات والأرشيف (سجلات الأمان)">
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="#6C757D" FlowDirection="LeftToRight" />
-                        <TextBlock x:Name="TxtTitleArchive" Text="الأرشيف" FontWeight="SemiBold" FontSize="12" />
-                    </StackPanel>
-                </Button>
+                <!-- Center: Elastic Flexible Spacer (Column 1 Width="*") prevents any collision -->
 
-                <!-- 3. Lightweight Delta Updater -->
-                <Button x:Name="BtnTitleUpdateCheck"
-                        Click="BtnTitleUpdateCheck_Click"
-                        Padding="10,4"
-                        CornerRadius="14"
-                        Background="{ThemeResource LayerFillColorAltBrush}"
-                        ToolTipService.ToolTip="التحقق من التحديثات الخفيفة (Delta Updater)">
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <FontIcon Glyph="&#xE895;" FontSize="12" Foreground="#0D6EFD" FlowDirection="LeftToRight" />
-                        <TextBlock x:Name="TxtTitleUpdate" Text="تحديثات" FontWeight="SemiBold" FontSize="12" />
-                    </StackPanel>
-                </Button>
+                <!-- Right / End: Quick Action Tool Buttons -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- 1. Add New Order Modal Trigger -->
+                    <Button x:Name="BtnTitleAddOrder"
+                            Click="BtnTitleAddOrder_Click"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Padding="12,5"
+                            CornerRadius="14">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE710;" FontSize="12" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleAddOrder" Text="أمر تدريب جديد" FontWeight="Bold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
 
-                <!-- 4. Dynamic Language Switcher Toggle -->
-                <Button x:Name="BtnTitleLangToggle"
-                        Click="BtnLanguageToggle_Click"
-                        Padding="10,4"
-                        CornerRadius="14"
-                        Background="{ThemeResource LayerFillColorAltBrush}"
-                        ToolTipService.ToolTip="Switch Language / تغيير لغة المنظومة">
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                        <FontIcon Glyph="&#xE774;" FontSize="13" Foreground="#0D6EFD" />
-                        <TextBlock x:Name="TxtTitleLangBadge" Text="English" FontWeight="Bold" FontSize="12" />
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-        </Grid>
+                    <!-- 2. Archive / Soft-Deleted Orders -->
+                    <Button x:Name="BtnTitleArchive"
+                            Click="BtnTitleArchive_Click"
+                            Padding="10,5"
+                            CornerRadius="14"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            ToolTipService.ToolTip="سلة المحفوظات والأرشيف (سجلات الأمان)">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="#6C757D" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleArchive" Text="الأرشيف" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 3. Lightweight Delta Updater -->
+                    <Button x:Name="BtnTitleUpdateCheck"
+                            Click="BtnTitleUpdateCheck_Click"
+                            Padding="10,5"
+                            CornerRadius="14"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            ToolTipService.ToolTip="التحقق من التحديثات الخفيفة (Delta Updater)">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE895;" FontSize="12" Foreground="#0D6EFD" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleUpdate" Text="تحديثات" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 4. Dynamic Language Switcher Toggle -->
+                    <Button x:Name="BtnTitleLangToggle"
+                            Click="BtnLanguageToggle_Click"
+                            Padding="10,5"
+                            CornerRadius="14"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            ToolTipService.ToolTip="Switch Language / تغيير لغة المنظومة">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE774;" FontSize="13" Foreground="#0D6EFD" />
+                            <TextBlock x:Name="TxtTitleLangBadge" Text="English" FontWeight="Bold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
 
         <!-- Main Navigation View (Adaptive RTL Right-Docked) -->
         <NavigationView x:Name="NavView" 

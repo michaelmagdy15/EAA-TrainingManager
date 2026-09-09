@@ -205,9 +205,9 @@ public sealed partial class MainWindow : Window
         if (NavView != null) NavView.FlowDirection = dir;
         if (ContentFrame != null) ContentFrame.FlowDirection = dir;
 
-        // 2. Window Title & TitleBar
+        // 2. Window Title & Header
         this.Title = LocalizationService.Instance.WindowTitle;
-        if (AppTitleBar != null) AppTitleBar.Title = LocalizationService.Instance.AppTitle;
+        if (TxtAppTitle != null) TxtAppTitle.Text = LocalizationService.Instance.AppTitle;
 
         // 3. Action Buttons
         if (TxtTitleAddOrder != null) TxtTitleAddOrder.Text = isEn ? "New Order" : "أمر تدريب جديد";

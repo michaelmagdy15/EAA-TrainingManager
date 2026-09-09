@@ -14,6 +14,17 @@ public class ProgramDistributionItem
     public string ColorHex { get; set; } = "#0D6EFD";
 
     public string DisplayText => $"{ProgramName}: {UniqueStudentsCount} طالب ({TotalOrdersCount} أمر)";
+
+    public string BiDiProgramName => Services.LocalizationService.Instance.IsEnglish ? MilestoneKey switch
+    {
+        "ATP" => "Airline Transport (ATP)",
+        "CPL_IR" => "Commercial & Instruments (CPL/IR)",
+        "EVALUATION" => "Equivalency & Evaluations",
+        "PPL" => "Private Pilot (PPL)",
+        _ => ProgramName
+    } : ProgramName;
+
+    public string TraineeUnitLabel => Services.LocalizationService.Instance.IsEnglish ? "Trainees" : "طالب فعلي";
 }
 
 public class DashboardMetrics

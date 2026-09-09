@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using EAATrainingManager.Helpers;
+using EAATrainingManager.Services;
 
 namespace EAATrainingManager.Models;
 
@@ -62,15 +63,19 @@ public class Student
     {
         get
         {
+            bool isEn = LocalizationService.Instance.IsEnglish;
             var list = new List<string>();
             if (HasPPL) list.Add("PPL");
             if (HasCPLIR) list.Add("CPL/IR");
             if (HasATP) list.Add("ATP");
-            if (HasEvaluation) list.Add("تقييم");
-            if (list.Count == 0) return "لا توجد مراحل مسجلة";
-            return ArabicTextHelper.WrapAviationBiDi(string.Join(" 🡸 ", list));
+            if (HasEvaluation) list.Add(isEn ? "Eval" : "تقييم");
+            if (list.Count == 0) return isEn ? "No recorded milestones" : "لا توجد مراحل مسجلة";
+            string separator = isEn ? " ➔ " : " 🡸 ";
+            return ArabicTextHelper.WrapAviationBiDi(string.Join(separator, list));
         }
     }
+
+    public string TrajectoryButtonText => LocalizationService.Instance.IsEnglish ? "Trajectory" : "عرض المسار";
 
     public List<TrainingOrder> Orders { get; set; } = new();
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -14,7 +14,7 @@ public class UpdateCheckResult
     public bool IsUpToDate { get; set; }
     public bool IsOffline { get; set; }
     public string CurrentVersion { get; set; } = "2.2.1";
-    public string LatestVersion { get; set; } = "2.2.1";
+    public string LatestVersion { get; set; } = "2.2.2";
     public double PatchSizeMb { get; set; } = 0.0;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
