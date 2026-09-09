@@ -207,13 +207,18 @@ $tempNotesFile = [System.IO.Path]::GetTempFileName()
 [System.IO.File]::WriteAllText($tempNotesFile, $Notes, [System.Text.Encoding]::UTF8)
 
 try {
-    $existingCheck = gh release view $Tag --repo $GitHubRepo 2>&1
-    if ($LASTEXITCODE -eq 0) {
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    & gh release view $Tag --repo $GitHubRepo 2>$null
+    $releaseExists = ($LASTEXITCODE -eq 0)
+    $ErrorActionPreference = $prevEAP
+
+    if ($releaseExists) {
         Write-Host "  -> Release $Tag exists. Uploading/overwriting EAATrainingManager.exe asset..." -ForegroundColor Yellow
-        gh release upload $Tag $ExePath --repo $GitHubRepo --clobber
+        & gh release upload $Tag $ExePath --repo $GitHubRepo --clobber
     } else {
         Write-Host "  -> Creating fresh release $Tag..." -ForegroundColor Gray
-        gh release create $Tag $ExePath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest
+        & gh release create $Tag $ExePath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest
     }
     Write-Host "  -> Release $Tag uploaded and marked as Latest!" -ForegroundColor Green
 } finally {
