@@ -14,7 +14,7 @@ public class UpdateCheckResult
     public bool IsUpToDate { get; set; }
     public bool IsOffline { get; set; }
     public string CurrentVersion { get; set; } = "2.2.1";
-    public string LatestVersion { get; set; } = "2.2.2";
+    public string LatestVersion { get; set; } = "2.2.3";
     public double PatchSizeMb { get; set; } = 0.0;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
@@ -23,7 +23,7 @@ public class UpdateCheckResult
 
 public class UpdateService
 {
-    private const string CurrentAppVersion = "2.2.1";
+    private const string CurrentAppVersion = "2.2.2";
     private const string RepoOwner = "michaelmagdy15";
     private const string RepoName = "EAA-TrainingManager";
     
@@ -36,7 +36,7 @@ public class UpdateService
     {
         _httpClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(5) // Fast timeout for airfield/mobile slow internet
+            Timeout = TimeSpan.FromSeconds(10) // Fast timeout for airfield/mobile slow internet
         };
         _httpClient.DefaultRequestHeaders.Add("User-Agent", "EAA-TrainingManager-Desktop");
     }
@@ -82,8 +82,8 @@ public class UpdateService
             {
                 result.IsOffline = true;
                 result.Message = LocalizationService.Instance.Text(
-                    "المنظومة في وضع عدم الاتصال (100% Offline Mode) - الإصدار الحالي v2.2.0 يعمل بكفاءة تامة.",
-                    "System is operating in 100% Offline Mode. Current version v2.2.0 is fully operational.");
+                    "المنظومة في وضع عدم الاتصال (100% Offline Mode) - الإصدار الحالي يعمل بكفاءة تامة.",
+                    "System is operating in 100% Offline Mode. Current version is fully operational.");
                 return result;
             }
 
@@ -130,10 +130,191 @@ public class UpdateService
             // Fully offline - no crash, no freeze
             result.IsOffline = true;
             result.Message = LocalizationService.Instance.Text(
-                "تعذر الوصول لشبكة التحديثات (المنظومة تعمل محلياً 100% بدون إنترنت). الإصدار الحالي v2.2.0 مستقر.",
-                "Updates server unreachable (System operating 100% offline). Current version v2.2.0 is stable.");
+                $"تعذر الوصول لشبكة التحديثات (المنظومة تعمل محلياً 100% بدون إنترنت). الإصدار الحالي v{CurrentAppVersion} مستقر.",
+                $"Updates server unreachable (System operating 100% offline). Current version v{CurrentAppVersion} is stable.");
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Downloads the updated standalone executable in chunks with progress reporting,
+    /// writes it to a temporary file, and triggers a seamless background restart updater.
+    /// Handles private GitHub releases, non-redirected bearer tokens for Azure Blob storage,
+    /// and ensures zero admin elevation requirements.
+    /// </summary>
+    public async Task<bool> DownloadAndInstallUpdateAsync(
+        string latestVersion,
+        Action<long, long, int>? progressCallback = null,
+        Action<string>? statusCallback = null)
+    {
+        try
+        {
+            statusCallback?.Invoke(LocalizationService.Instance.Text(
+                "جارٍ تحديد موقع ملف التحديث من المستودع السحابي...",
+                "Locating update binary asset in cloud release..."));
+
+            string downloadDirectUrl = string.Empty;
+            long expectedSize = 0;
+
+            if (!string.IsNullOrWhiteSpace(ReadOnlyToken))
+            {
+                // Query release metadata from private repo
+                using var relReq = new HttpRequestMessage(HttpMethod.Get, $"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/tags/v{latestVersion}");
+                relReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ReadOnlyToken);
+                relReq.Headers.UserAgent.ParseAdd("EAA-TrainingManager-Desktop");
+                relReq.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/vnd.github.v3+json"));
+
+                using var relResp = await _httpClient.SendAsync(relReq);
+                if (!relResp.IsSuccessStatusCode)
+                {
+                    throw new Exception($"Failed to retrieve release metadata: HTTP {(int)relResp.StatusCode}");
+                }
+
+                var relJson = await relResp.Content.ReadAsStringAsync();
+                using var relDoc = JsonDocument.Parse(relJson);
+                if (relDoc.RootElement.TryGetProperty("assets", out var assets) && assets.GetArrayLength() > 0)
+                {
+                    foreach (var asset in assets.EnumerateArray())
+                    {
+                        string name = asset.GetProperty("name").GetString() ?? "";
+                        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                        {
+                            string assetApiUrl = asset.GetProperty("url").GetString()!;
+                            expectedSize = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+
+                            // Request direct Azure/S3 download link via 302 Found redirect without following
+                            var noRedirectHandler = new HttpClientHandler { AllowAutoRedirect = false };
+                            using var noRedirectClient = new HttpClient(noRedirectHandler) { Timeout = TimeSpan.FromSeconds(30) };
+                            
+                            using var assetReq = new HttpRequestMessage(HttpMethod.Get, assetApiUrl);
+                            assetReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", ReadOnlyToken);
+                            assetReq.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/octet-stream"));
+                            assetReq.Headers.UserAgent.ParseAdd("EAA-TrainingManager-Desktop");
+
+                            using var assetResp = await noRedirectClient.SendAsync(assetReq);
+                            if (assetResp.StatusCode == System.Net.HttpStatusCode.Found ||
+                                assetResp.StatusCode == System.Net.HttpStatusCode.Moved ||
+                                assetResp.StatusCode == System.Net.HttpStatusCode.SeeOther)
+                            {
+                                downloadDirectUrl = assetResp.Headers.Location?.ToString() ?? string.Empty;
+                            }
+                            else if (assetResp.IsSuccessStatusCode)
+                            {
+                                downloadDirectUrl = assetApiUrl;
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(downloadDirectUrl))
+            {
+                // Fallback to standard public release asset download URL
+                downloadDirectUrl = $"https://github.com/{RepoOwner}/{RepoName}/releases/download/v{latestVersion}/EAATrainingManager.exe";
+            }
+
+            statusCallback?.Invoke(LocalizationService.Instance.Text(
+                "جارٍ بدء تنزيل التحديث السحابي...",
+                "Initiating background package download..."));
+
+            string tempExePath = Path.Combine(Path.GetTempPath(), $"EAATrainingManager_Update_v{latestVersion}.exe");
+            if (File.Exists(tempExePath))
+            {
+                try { File.Delete(tempExePath); } catch { }
+            }
+
+            // Download binary stream cleanly without GitHub authorization header (compatible with Azure Blob / S3 SAS)
+            using (var downloadClient = new HttpClient { Timeout = TimeSpan.FromMinutes(15) })
+            {
+                downloadClient.DefaultRequestHeaders.UserAgent.ParseAdd("EAA-TrainingManager-Desktop");
+
+                using var response = await downloadClient.GetAsync(downloadDirectUrl, HttpCompletionOption.ResponseHeadersRead);
+                response.EnsureSuccessStatusCode();
+
+                long totalBytes = response.Content.Headers.ContentLength ?? expectedSize;
+
+                using var contentStream = await response.Content.ReadAsStreamAsync();
+                using var fileStream = new FileStream(tempExePath, FileMode.Create, FileAccess.Write, FileShare.None, 81920, true);
+
+                var buffer = new byte[81920];
+                long totalBytesRead = 0;
+                int bytesRead;
+
+                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer, 0, bytesRead);
+                    totalBytesRead += bytesRead;
+
+                    int percentage = totalBytes > 0 ? (int)((totalBytesRead * 100) / totalBytes) : 0;
+                    progressCallback?.Invoke(totalBytesRead, totalBytes, percentage);
+
+                    double readMb = Math.Round(totalBytesRead / (1024.0 * 1024.0), 1);
+                    double totalMb = totalBytes > 0 ? Math.Round(totalBytes / (1024.0 * 1024.0), 1) : readMb;
+
+                    statusCallback?.Invoke(LocalizationService.Instance.Text(
+                        $"جارٍ تحميل حزمة التحديث: {readMb} ميجابايت من {totalMb} ميجابايت ({percentage}%)",
+                        $"Downloading update package: {readMb} MB of {totalMb} MB ({percentage}%)"));
+                }
+            }
+
+            // Verify downloaded binary exists and has non-trivial size (> 5 MB)
+            var downloadedInfo = new FileInfo(tempExePath);
+            if (!downloadedInfo.Exists || downloadedInfo.Length < 5 * 1024 * 1024)
+            {
+                throw new Exception("Downloaded update file is corrupt or incomplete.");
+            }
+
+            statusCallback?.Invoke(LocalizationService.Instance.Text(
+                "اكتمل التنزيل بنجاح! جارٍ تثبيت الإصدار وإعادة تشغيل المنظومة تلقائياً...",
+                "Download completed! Applying update and relaunching application..."));
+
+            // Get target current running executable path and PID
+            string currentExePath = Environment.ProcessPath 
+                ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName 
+                ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "EAATrainingManager.exe");
+
+            int currentPid = Environment.ProcessId;
+
+            // Generate self-cleaning updater batch script
+            string updaterBatchPath = Path.Combine(Path.GetTempPath(), "eaa_updater.bat");
+            string scriptContent = $@"@echo off
+timeout /t 1 /nobreak >nul
+:waitloop
+tasklist /fi ""PID eq {currentPid}"" 2>nul | find ""{currentPid}"" >nul
+if not errorlevel 1 (
+    timeout /t 1 /nobreak >nul
+    goto waitloop
+)
+copy /y ""{tempExePath}"" ""{currentExePath}"" >nul
+start """" ""{currentExePath}""
+del ""{tempExePath}"" 2>nul
+del ""%~f0"" 2>nul
+";
+            File.WriteAllText(updaterBatchPath, scriptContent);
+
+            // Launch background updater script
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "cmd.exe",
+                Arguments = $"/c \"{updaterBatchPath}\"",
+                CreateNoWindow = true,
+                WindowStyle = System.Diagnostics.ProcessWindowStyle.Hidden,
+                UseShellExecute = false
+            };
+            System.Diagnostics.Process.Start(psi);
+
+            // Gracefully terminate current process so updater script can overwrite it
+            Environment.Exit(0);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            statusCallback?.Invoke(LocalizationService.Instance.Text(
+                $"فشل تنزيل التحديث: {ex.Message}",
+                $"Update installation failed: {ex.Message}"));
+            return false;
+        }
     }
 }

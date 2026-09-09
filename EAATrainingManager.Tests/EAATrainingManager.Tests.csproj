@@ -6,13 +6,16 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <Platforms>x64</Platforms>
+    <UseWinUI>true</UseWinUI>
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.2" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.4.0" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.2705" />
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +27,8 @@
     <Compile Include="..\EAATrainingManager\Services\DemographicsEngine.cs" Link="DemographicsEngine.cs" />
     <Compile Include="..\EAATrainingManager\Services\ExcelSyncService.cs" Link="ExcelSyncService.cs" />
     <Compile Include="..\EAATrainingManager\Services\BackupService.cs" Link="BackupService.cs" />
+    <Compile Include="..\EAATrainingManager\Services\LocalizationService.cs" Link="LocalizationService.cs" />
+    <Compile Include="..\EAATrainingManager\Services\UpdateService.cs" Link="UpdateService.cs" />
     <Compile Include="..\EAATrainingManager\Services\ExcelMirrorService.cs" Link="ExcelMirrorService.cs" />
   </ItemGroup>
 

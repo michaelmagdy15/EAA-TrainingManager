@@ -145,6 +145,15 @@ Write-Host "  Path: $ExePath" -ForegroundColor Gray
 Write-Host "  Size: $([math]::Round($fileSizeBytes / 1MB, 2)) MB ($fileSizeBytes bytes)" -ForegroundColor Gray
 Write-Host "  SHA256: $sha256" -ForegroundColor Gray
 
+# Copy to root executable for immediate local use
+$rootExe = Join-Path $ScriptRoot "EAATrainingManager.exe"
+try {
+    Copy-Item -Path $ExePath -Destination $rootExe -Force
+    Write-Host "  -> Updated local root executable: $rootExe" -ForegroundColor Green
+} catch {
+    Write-Warning "Could not copy to root executable (it may be currently running)."
+}
+
 # 5. Update update_manifest.json
 Write-Host "`n[3/6] Updating update_manifest.json..." -ForegroundColor Cyan
 $todayDate = (Get-Date).ToString("yyyy-MM-dd")

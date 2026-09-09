@@ -594,6 +594,24 @@ class Program
             failures++;
         }
 
+        // TEST SUITE 15: Lightweight In-App Updater Engine
+        Console.WriteLine("\n[TEST SUITE 15] Testing Lightweight In-App Updater Engine...");
+        try
+        {
+            var updateService = new UpdateService();
+            var checkResult = await updateService.CheckForUpdatesAsync();
+
+            AssertTrue(checkResult != null, "CheckForUpdatesAsync returned valid result object");
+            AssertTrue(checkResult.IsSuccess || checkResult.IsOffline, "Update service handled connection smoothly");
+            Console.WriteLine($"  ✔ Update Check Result: Current={checkResult.CurrentVersion}, Latest={checkResult.LatestVersion}, HasUpdate={checkResult.HasUpdate}");
+            Console.WriteLine("  ✔ Lightweight In-App Updater Engine PASSED!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  ✖ TEST SUITE 15 FAILED: {ex.Message}");
+            failures++;
+        }
+
         Console.WriteLine("\n===============================================================================");
         if (failures == 0)
         {
