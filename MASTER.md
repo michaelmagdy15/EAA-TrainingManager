@@ -524,52 +524,42 @@ The system includes an enterprise test suite verifying every domain algorithm, l
 تحية طيبة وبعد،،
 
 يسعدنا الإعلان عن إطلاق وتعميم التحديث التشغيلي الجديد:
-🌟 «منظومة إدارة وتتبع عمليات التدريب الجوي (EAA-TMS) – الإصدار v2.2.4» 🌟
+🌟 «منظومة إدارة وتتبع عمليات التدريب الجوي (EAA-TMS) – الإصدار v2.2.5» 🌟
 
-🎯 أهم المزايا والإضافات الجديدة في هذا التحديث:
-1️⃣ التحديث الذكي بنقرة واحدة (In-App Delta Updates): إمكانية تحديث البرنامج مباشرة من داخل الشاشة؛ حيث يقوم النظام بتنزيل حزمة تحديث خفيفة للغاية (~700 كيلوبايت فقط) في ثوانٍ معدودة دون الحاجة لإعادة تحميل الملف الكامل (240 ميجابايت).
-2️⃣ العمل بدون إنترنت نهائياً (100% Offline): استمرار العمل بكفاءة تامة داخل غرف العمليات ومرابض الطائرات دون الحاجة لأي اتصال بالإنترنت.
-3️⃣ ضبط هندسي كامل للجداول (UI Alignment): محاذاة فائقة الدقة لصفوف الجداول وأعمدة البيانات لمنع أي اهتزاز أثناء تغيير حجم الشاشة.
-4️⃣ حائط صد برمجي ضد الأعطال (Crash Shield): نظام حماية متقدم يلتقط أي استثناءات ويسجلها محلياً ويمنع الإغلاق المفاجئ للبرنامج.
-5️⃣ نافذة الإدخال الذكية المتغيرة: إدخال أوامر التدريب لكافة المسارات (61 حر، 141 دفعات، تجديد طراز على أسطول C172/Gas, B58, G36, Centurion, BE-76, PA-28/34، والمعادلات).
-6️⃣ ربط ومنع تكرار هوية المتدرب (Deduplication): التعرف الفوري على الطالب وربط أوامره بملفه الموحد لمنع تضخيم الإحصائيات.
-7️⃣ إتمام الكورس السريع (1-Click Graduation): توثيق التخرج الفعلي وتحديث حالة الطالب إلى خريج معتمد بضغطة زر.
-8️⃣ الحفظ المرآتي مع الإكسيل والنسخ الاحتياطي الساخن: مزامنة تلقائية لملف EAA_Master_Mirror.xlsx على سطح المكتب وحفظ دوري للبيانات.
-9️⃣ سلة الأرشيف الآمن: حماية ضد الحذف الخاطئ مع إمكانية الاستعادة بضغطة زر.
-🔟 كشوفات الوافدين الدبلوماسية: استخراج كشوفات الإكسيل المعتمدة للملحقيات وسلطة الطيران المدني فورياً.
+🎯 أهم المزايا والإضافات الجديدة في هذا التحديث (v2.2.5):
+1️⃣ استيراد مبسط ومرئي لملفات الإكسيل (Foolproof Excel Selection): تم إلغاء الحاجة نهائياً لكتابة أو نسخ مسارات الملفات المعقدة (`C:\...`). يمكن لموظفي التدريب الآن اختيار ملف الإكسيل بنقرة واحدة عبر متصفح الملفات المباشر، أو سحب الملف وإفلاته (Drag & Drop) في منطقة الاستيراد مع فحص تلقائي لبيانات وحجم وتاريخ الملف.
+2️⃣ زر تصغير النافذة لشريط المهام (Minimize Control): إضافة زر تصغير مخصص (`_`) في شريط العنوان وتفعيل إمكانية إنزال النافذة لشريط المهام دون إغلاق البرنامج حتى يتمكن الموظف من إنجاز مهام أخرى بحرية.
+3️⃣ اختصارات انتقال سريعة للاستيراد: إضافة زر مباشر في شريط العنوان العلوي وفي لوحة المؤشرات للانتقال الفوري لشاشة الاستيراد والتصدير.
+4️⃣ حزمة التحديث الخفيف المدمج (In-App Delta Update v2.2.5): إمكانية التحديث المباشر من داخل البرنامج بحزمة خفيفة للغاية (711 كيلوبايت فقط) في ثوانٍ معدودة دون إعادة تنزيل الملف الكامل (240 ميجابايت).
+5️⃣ العمل بدون إنترنت نهائياً (100% Offline): استمرار العمل بكفاءة تامة داخل غرف العمليات ومرابض الطائرات دون الحاجة لأي اتصال بالإنترنت.
 
 📥 كيفية الحصول على التحديث:
-- للمستخدمين الحاليين: اضغط على زر (تحديثات / Updates) في أعلى شريط البرنامج واضغط "تثبيت التحديث الآن".
-- للأجهزة الجديدة: قم بنسخ ملف (EAATrainingManager.exe) وتشغيله مباشرة دون أي خطوات تثبيت.
+- للمستخدمين الحاليين: اضغط على زر (تحديثات / Updates) في أعلى شريط البرنامج واضغط "تثبيت التحديث الآن"؛ وسيتم تطبيق التحديث الخفيف وإعادة التشغيل خلال 5 ثوانٍ.
+- للأجهزة الجديدة: قم بنسخ وتشغيل ملف (`EAATrainingManager.exe`) مباشرة دون أي خطوات تثبيت.
 
 نسأل الله دوام التوفيق والنجاح لأكاديميتنا العريقة ووطننا الغالي. 🇪🇬✈️
 ```
 
 ---
 
-### 🌐 Companion English WhatsApp Announcement (v2.2.4)
+### 🌐 Companion English WhatsApp Announcement (v2.2.5)
 *(For management summaries or English-speaking operational briefings):*
 
 ```text
 ✈️ Egyptian Aviation Academy (EAA) – Flight Training Directorate
-Official System Operational Release v2.2.4:
+Official System Operational Release v2.2.5:
 
 We are pleased to announce the official release of:
-🌟 EAA Flight Training Operations Management System (EAA-TMS) v2.2.4 🌟
+🌟 EAA Flight Training Operations Management System (EAA-TMS) v2.2.5 🌟
 
 Key Capabilities & Latest Upgrades:
-✅ 100% Offline Standalone Executable: Runs directly off USB/local drive with zero internet dependency in dispatch bunkers and airfield ops rooms.
-✅ In-App Micro Delta Updater: Update in seconds directly from within the app! Downloads lightweight differential patches (~700 KB only) instead of the full 240 MB bundle.
-✅ Flawless UI Grid Alignment: Standardized row containers (`ListView.ItemContainerStyle`) eliminate visual jitter and ensure perfect table alignment across all resolutions.
-✅ Global Crash Immunity Shield: Top-level diagnostic exception guards prevent unexpected crashes and log issues safely to local storage.
-✅ Dynamic Smart Entry Form: Context-adaptive input fields tailored per training stream (Part 61, Part 141, Type Rating & Hour Building across C172/Gas, B58, G36, Centurion, BE-76, PA-28/34, and Foreign Evaluations).
-✅ Live Trainee Deduplication: Instant fuzzy search links new enrollments directly to existing trainee dossiers, ensuring accurate human headcount vs course order counts.
-✅ 1-Click Course Completion & Graduation: Fast-track graduation logging with automatic student status transition.
-✅ Real-Time Background Excel Mirroring: Immediate asynchronous sync to Desktop `EAA_Master_Mirror.xlsx`.
-✅ Non-Destructive Soft Delete & Restore: Dedicated archive bin with 1-click restoration safeguards against accidental data loss.
-✅ International Cadet Demographics: Instant ministerial and consular Excel rosters for civil aviation authorities and foreign embassies.
+✅ Foolproof Excel File Ingestion: Zero path-typing required! Non-technical staff can browse workbooks with 1 click, drag and drop files onto the drop zone, and benefit from automatic file detection.
+✅ Dedicated Title Bar Window Minimize: Integrated minimize button (`_`) and OverlappedPresenter support to lower the app to the Windows taskbar without quitting.
+✅ 1-Click Fast Navigation: Dedicated Excel import shortcuts in the top navigation bar and dashboard.
+✅ Micro Delta Updater (v2.2.5): Updates in seconds directly within the app! Downloads lightweight differential patch (~711 KB only) without redownloading the full 240 MB package.
+✅ 100% Offline Standalone Executable: Operates in zero-internet bunkers and airfield dispatch rooms without installation.
 
 To Update / Run:
-- In-App: Click "Updates" in the app's title bar to apply the micro-patch in seconds.
-- Standalone: Double-click `EAATrainingManager.exe` on any Windows 10/11 workstation without installation.
+- In-App: Click "Updates" in the app's title bar to apply the 711 KB micro-patch.
+- Standalone: Run `EAATrainingManager.exe` directly on any Windows 10/11 workstation.
 ```
