@@ -1,20 +1,22 @@
 # Egyptian Aviation Academy (EAA) Training Management System (EAA-TMS)
 ### منظومة إدارة وتتبع عمليات التدريب الجوي – الأكاديمية المصرية لعلوم الطيران (وزارة الطيران المدني)
 
+[![Version](https://img.shields.io/badge/Release-v2.2.4-blue?logo=github&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![Framework](https://img.shields.io/badge/Framework-.NET%209%20%7C%20C%23%2013-512BD4?logo=dotnet&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![UI Engine](https://img.shields.io/badge/UI-WinUI%203%20(Windows%20App%20SDK)-0078D4)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![Database](https://img.shields.io/badge/Database-SQLite%20(WAL%20Mode)-003B57?logo=sqlite&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![Mode](https://img.shields.io/badge/Architecture-100%25%20Offline--First-success)](https://github.com/michaelmagdy15/EAA-TrainingManager)
-[![Tests](https://img.shields.io/badge/Verification%20Tests-14%2F14%20Passing%20(100%25)-brightgreen)](https://github.com/michaelmagdy15/EAA-TrainingManager)
+[![In-App Updates](https://img.shields.io/badge/Updates-Delta%20Patches%20(~700%20KB)-orange)](https://github.com/michaelmagdy15/EAA-TrainingManager)
+[![Tests](https://img.shields.io/badge/Verification%20Tests-15%2F15%20Passing%20(100%25)-brightgreen)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 
 ---
 
 ## 📖 Overview | نظرة عامة
 
-**EAA-TMS** is a mission-critical, 100% offline-first Windows 11 desktop management system engineered specifically for the Flight Training Directorate of the **Egyptian Aviation Academy (الأكاديمية المصرية لعلوم الطيران)** under the Ministry of Civil Aviation.
+**EAA-TMS** (Version 2.2.4) is a mission-critical, 100% offline-first Windows 11 desktop management system engineered specifically for the Flight Training Directorate of the **Egyptian Aviation Academy (الأكاديمية المصرية لعلوم الطيران)** under the Ministry of Civil Aviation.
 
-It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام حر)`, `141 (ا نظام)`, `تقييم (د)`) with an enterprise-grade digital aviation terminal. The application provides two-way operational management, student identity deduplication, demographic intelligence, and automatic background data protection.
+It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام حر)`, `141 (ا نظام)`, `تقييم (د)`) with an enterprise-grade digital aviation terminal. The application provides two-way operational management, student identity deduplication, demographic intelligence, automatic background data protection, in-app delta updates, and one-click release automation.
 
 > **100% Offline Standalone Executable**: Operates in zero-internet flight line dispatch bunkers and airfield ops rooms at 6th of October Airport (HEOC). Zero external runtimes, zero cloud subscriptions, and zero installation wizards required.
 
@@ -39,13 +41,31 @@ It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام ح
 - **Hot SQLite Online Snapshots**: Automated, ACID-compliant database snapshots (`eaa_backup_YYYY-MM-DD_HHmm.db`) with 30-version rolling retention.
 - **Anti-Deletion Safeguard**: Non-destructive soft deletes (`IsArchived = 1`) with an **Archive & Trash Bin** dialog featuring 1-click restoration.
 
-### 4. International Cadets Demographics Engine
+### 4. In-App Lightweight Delta Updater (`محدث النظام الذكي المدمج`)
+- **Micro Delta Patches (~700 KB to 2.5 MB)**: Airfield staff with slow mobile connections no longer need to download the full 240 MB executable. The app detects, downloads, and applies differential patch archives containing only modified binaries (`EAATrainingManager.dll`, `.pri`, `.deps.json`).
+- **Private Repository Support**: Integrated fine-grained read-only Bearer token authentication allows seamless update distribution directly from private GitHub repositories (`michaelmagdy15/EAA-TrainingManager`) via the GitHub REST API.
+- **Direct Cloud Redirect Resolution**: Automatically resolves GitHub 302 Found redirects for Azure Blob / AWS S3 storage without leaking authorization headers.
+- **Live Interactive Progress & Self-Cleaning Restart**: Interactive `UpdateDialog` displays download progress, percentages, and MB counters, followed by a background self-terminating updater script (`eaa_updater.bat`) that swaps binaries, restarts the app, and cleans up temporary files.
+- **Zero-Crash Offline Handling**: Gracefully handles disconnected air-gapped environments without exceptions or UI freezes.
+
+### 5. One-Click Automated Release Pipeline (`أتمتة النشر والإصدار بضغطة زر`)
+- **Single-Script Execution**: Run `publish_release.bat` or `publish_release.ps1` to build, test, package, and release.
+- **Dual Package Generation**: Builds both the full self-contained standalone executable (~98 MB / 240 MB) and the lightweight differential patch zip (~700 KB).
+- **Manifest Synchronization**: Automatically computes sizes and updates `update_manifest.json`.
+- **Git & GitHub Integration**: Auto-tags releases (`vX.X.X`), commits manifests, pushes to origin, and publishes releases with uploaded assets via the GitHub CLI or authenticated API.
+
+### 6. International Cadets Demographics Engine
 - Automatic standardization of foreign nationalities (Saudi, Emirati, Libyan, Sudanese, Jordanian, etc.).
 - One-click export of the **Consular International Students Roster** formatted with official 4-line ministerial headers for civil aviation authorities and foreign cultural attachés.
 
-### 5. Multi-Year Scoping & Instant RTL/LTR Switching
+### 7. Multi-Year Scoping & Instant RTL/LTR Switching
 - Dedicated academic year selector (`2026`, `2025`, `2024`, or All Years).
 - Instant live bilingual switching between **Right-to-Left (Arabic)** and **Left-to-Right (English)**.
+
+### 8. Enterprise UI Layout Polish & Crash Immunity Shield
+- **Flawless Table Alignment**: Implemented `ListView.ItemContainerStyle` with `HorizontalContentAlignment="Stretch"` and `MinHeight="48"` across all operational tables (`OrdersPage`, `StudentsPage`, `TypeRatingPage`, `DashboardPage`) preventing row jitter, misalignment, or text clipping.
+- **Bilingual Action Buttons**: Dynamic binding for trajectory inspection buttons (`TrajectoryButtonText`).
+- **Global Crash Shield**: Top-level exception handling in `App.xaml.cs` (`UnhandledException` and `UnobservedTaskException`) writing diagnostic crash logs to disk while displaying graceful bilingual dialogs, preventing silent desktop crashes.
 
 ---
 
@@ -56,7 +76,7 @@ It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام ح
 2. Double-click `EAATrainingManager.exe` to run.
 3. The app starts immediately. Data is stored safely in `%LocalAppData%\EAA_TrainingManager\`.
 
-### Option B: Build from Source
+### Option B: Build & Test from Source
 Ensure you have [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) and Windows 10/11:
 
 ```bash
@@ -64,7 +84,7 @@ Ensure you have [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) a
 git clone https://github.com/michaelmagdy15/EAA-TrainingManager.git
 cd EAA-TrainingManager
 
-# Run the 14 Automated Verification Test Suites
+# Run the 15 Automated Verification Test Suites
 dotnet run --project EAATrainingManager.Tests/EAATrainingManager.Tests.csproj
 
 # Build the WinUI 3 Desktop Application
@@ -74,11 +94,17 @@ dotnet build EAATrainingManager/EAATrainingManager.csproj -c Release -p:Platform
 dotnet publish EAATrainingManager/EAATrainingManager.csproj -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o "./Publish"
 ```
 
+### Option C: One-Click Automated Release
+To build, package, generate delta patches, and publish a new release:
+```cmd
+publish_release.bat
+```
+
 ---
 
 ## 🧪 Verification Test Suites (100% Pass)
 
-The project includes an automated test harness covering all domain algorithms:
+The project includes an automated test harness covering all domain algorithms and update subsystems:
 
 ```text
 [TEST SUITE 1]  ArabicTextHelper Normalization & BiDi Wrapping .......... PASSED ✔
@@ -95,16 +121,17 @@ The project includes an automated test harness covering all domain algorithms:
 [TEST SUITE 12] Hot SQLite Online Snapshot Backup Engine ............... PASSED ✔
 [TEST SUITE 13] Non-Destructive Soft Delete & 1-Click Restore ........... PASSED ✔
 [TEST SUITE 14] Background Excel Mirroring Engine ....................... PASSED ✔
+[TEST SUITE 15] Lightweight In-App Updater Engine ....................... PASSED ✔
 
-All 14 test suites completed with 100% success!
+All 15 test suites completed with 100% success!
 ```
 
 ---
 
 ## 🔄 Updates & Maintenance
 
-- **Delta Updates (2–5 MB)**: Click **"تحديثات / Updates"** in the app's title bar to check for differential patches against [`update_manifest.json`](update_manifest.json).
-- **Offline USB Update**: Simply replace `EAATrainingManager.exe` with the new version. Existing databases and records are preserved automatically.
+- **Online Differential Updates (~700 KB)**: Click **"تحديثات / Updates"** in the app's title bar. The system connects to the private GitHub repository, downloads the micro delta patch, applies it, and relaunches automatically.
+- **Air-Gapped Offline USB Update**: Simply copy the latest `EAATrainingManager.exe` to the machine. All historical records, databases, and configuration settings are preserved untouched.
 
 ---
 
