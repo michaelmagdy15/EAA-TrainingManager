@@ -135,10 +135,11 @@
 
                             <Button x:Name="BtnQuickImport" 
                                     Click="BtnQuickImport_Click" 
+                                    ToolTipService.ToolTip="الانتقال إلى شاشة استيراد واختيار ملف الإكسيل"
                                     Padding="12,8,12,8">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE898;" FlowDirection="LeftToRight" FontSize="14" />
-                                    <TextBlock x:Name="TxtQuickImport" Text="مزامنة سريعة" />
+                                    <FontIcon Glyph="&#xE8B5;" FlowDirection="LeftToRight" FontSize="14" Foreground="#198754" />
+                                    <TextBlock x:Name="TxtQuickImport" Text="استيراد وتحديث الإكسيل" />
                                 </StackPanel>
                             </Button>
 

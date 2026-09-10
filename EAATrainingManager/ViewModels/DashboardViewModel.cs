@@ -207,12 +207,41 @@ public partial class DashboardViewModel : ObservableObject
     }
 
     [RelayCommand]
-    public async Task QuickImportDefaultExcelAsync()
+    public async Task QuickImportDefaultExcelAsync(string? explicitPath = null)
     {
-        string defaultPath = @"C:\Users\Mi5a\EAA System\2اوامر التدريب.xlsx";
-        if (!File.Exists(defaultPath))
+        string? resolvedPath = explicitPath;
+        if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
         {
-            StatusMessage = "لم يتم العثور على ملف الإكسيل الافتراضي في المجلد.";
+            string primaryPath = @"C:\Users\Mi5a\EAA System\2اوامر التدريب.xlsx";
+            if (File.Exists(primaryPath))
+            {
+                resolvedPath = primaryPath;
+            }
+            else
+            {
+                string[] searchDirs = [
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    Environment.CurrentDirectory,
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "EAA System"),
+                    Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+                ];
+
+                foreach (var dir in searchDirs)
+                {
+                    if (!Directory.Exists(dir)) continue;
+                    string candidate = Path.Combine(dir, "2اوامر التدريب.xlsx");
+                    if (File.Exists(candidate))
+                    {
+                        resolvedPath = candidate;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(resolvedPath) || !File.Exists(resolvedPath))
+        {
+            StatusMessage = "لم يتم العثور على ملف الإكسيل، يرجى اختياره من شاشة استيراد وتحديث الإكسيل.";
             return;
         }
 
@@ -221,7 +250,7 @@ public partial class DashboardViewModel : ObservableObject
 
         try
         {
-            var result = await _excelService.ImportFromWorkbookAsync(defaultPath);
+            var result = await _excelService.ImportFromWorkbookAsync(resolvedPath);
             await LoadMetricsAsync();
             StatusMessage = $"تمت المزامنة بنجاح! تم حصر {result.UniqueStudentsCount} طالب فعلي من أصل {result.OrdersImported} أمر تدريب.";
         }

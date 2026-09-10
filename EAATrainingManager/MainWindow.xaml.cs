@@ -9,11 +9,14 @@ namespace EAATrainingManager;
 
 public sealed partial class MainWindow : Window
 {
+    public static new MainWindow? Current { get; private set; }
+    private Microsoft.UI.Windowing.AppWindow? _appWindow;
     private Type _currentPageType = typeof(DashboardPage);
     private object? _currentParameter = null;
 
     public MainWindow()
     {
+        Current = this;
         InitializeComponent();
 
         // Set official EAA icon, resize, and center window
@@ -42,26 +45,33 @@ public sealed partial class MainWindow : Window
         {
             var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
             var windowId = Microsoft.UI.Win32Interop.GetWindowIdFromWindow(hWnd);
-            var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
+            _appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
             
             var iconPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
             if (System.IO.File.Exists(iconPath))
             {
-                appWindow?.SetIcon(iconPath);
+                _appWindow?.SetIcon(iconPath);
             }
 
-            if (appWindow != null)
+            if (_appWindow != null)
             {
-                appWindow.Resize(new Windows.Graphics.SizeInt32(1380, 880));
+                if (_appWindow.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+                {
+                    presenter.IsMinimizable = true;
+                    presenter.IsMaximizable = true;
+                    presenter.IsResizable = true;
+                }
+
+                _appWindow.Resize(new Windows.Graphics.SizeInt32(1380, 880));
                 var displayArea = Microsoft.UI.Windowing.DisplayArea.GetFromWindowId(windowId, Microsoft.UI.Windowing.DisplayAreaFallback.Primary);
                 if (displayArea != null)
                 {
-                    var centeredPosition = appWindow.Position;
+                    var centeredPosition = _appWindow.Position;
                     centeredPosition.X = (displayArea.WorkArea.Width - 1380) / 2;
                     centeredPosition.Y = (displayArea.WorkArea.Height - 880) / 2;
-                    appWindow.Move(centeredPosition);
+                    _appWindow.Move(centeredPosition);
                 }
-                appWindow.Show(true);
+                _appWindow.Show(true);
             }
 
             ShowWindow(hWnd, 1); // SW_SHOWNORMAL
@@ -190,6 +200,55 @@ public sealed partial class MainWindow : Window
         await dlg.ShowAsync();
     }
 
+    public void NavigateTo(Type pageType, object? parameter = null)
+    {
+        _currentPageType = pageType;
+        _currentParameter = parameter;
+        try
+        {
+            var effect = LocalizationService.Instance.IsEnglish ? SlideNavigationTransitionEffect.FromLeft : SlideNavigationTransitionEffect.FromRight;
+            ContentFrame.Navigate(pageType, parameter, new SlideNavigationTransitionInfo { Effect = effect });
+
+            if (pageType == typeof(ExcelSyncPage) && NavItemExcelSync != null)
+            {
+                NavView.SelectedItem = NavItemExcelSync;
+            }
+            else if (pageType == typeof(DashboardPage) && NavItemDashboard != null)
+            {
+                NavView.SelectedItem = NavItemDashboard;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MainWindow.NavigateTo] {ex}");
+        }
+    }
+
+    private void BtnTitleExcelImport_Click(object sender, RoutedEventArgs e)
+    {
+        NavigateTo(typeof(ExcelSyncPage));
+    }
+
+    private void BtnTitleMinimize_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_appWindow?.Presenter is Microsoft.UI.Windowing.OverlappedPresenter presenter)
+            {
+                presenter.Minimize();
+            }
+            else
+            {
+                var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+                ShowWindow(hWnd, 6); // SW_MINIMIZE = 6
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BtnTitleMinimize_Click] {ex}");
+        }
+    }
+
     private void BtnLanguageToggle_Click(object sender, RoutedEventArgs e)
     {
         LocalizationService.Instance.ToggleLanguage();
@@ -210,9 +269,11 @@ public sealed partial class MainWindow : Window
         if (TxtAppTitle != null) TxtAppTitle.Text = LocalizationService.Instance.AppTitle;
 
         // 3. Action Buttons
+        if (TxtTitleExcelImport != null) TxtTitleExcelImport.Text = isEn ? "Import Excel" : "استيراد إكسيل";
         if (TxtTitleAddOrder != null) TxtTitleAddOrder.Text = isEn ? "New Order" : "أمر تدريب جديد";
         if (TxtTitleArchive != null) TxtTitleArchive.Text = isEn ? "Archive" : "الأرشيف";
         if (TxtTitleUpdate != null) TxtTitleUpdate.Text = isEn ? "Updates" : "تحديثات";
+        if (TxtTitleMinimize != null) TxtTitleMinimize.Text = isEn ? "Minimize" : "تصغير";
         if (TxtTitleLangBadge != null) TxtTitleLangBadge.Text = isEn ? "العربية" : "English";
         if (TxtPaneLangLabel != null) TxtPaneLangLabel.Text = isEn ? "Switch to العربية" : "تغيير اللغة (English)";
         if (TxtPaneLangCode != null) TxtPaneLangCode.Text = isEn ? "AR" : "EN";

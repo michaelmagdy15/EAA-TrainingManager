@@ -14,7 +14,7 @@ public class UpdateCheckResult
     public bool IsUpToDate { get; set; }
     public bool IsOffline { get; set; }
     public string CurrentVersion { get; set; } = "2.2.1";
-    public string LatestVersion { get; set; } = "2.2.4";
+    public string LatestVersion { get; set; } = "2.2.5";
     public double PatchSizeMb { get; set; } = 0.0;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
@@ -23,7 +23,7 @@ public class UpdateCheckResult
 
 public class UpdateService
 {
-    private const string CurrentAppVersion = "2.2.2";
+    private const string CurrentAppVersion = "2.2.5";
     private const string RepoOwner = "michaelmagdy15";
     private const string RepoName = "EAA-TrainingManager";
     

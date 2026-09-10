@@ -14,7 +14,19 @@ public partial class ExcelSyncViewModel : ObservableObject
     private readonly DatabaseService _dbService;
 
     [ObservableProperty]
-    private string _excelFilePath = @"C:\Users\Mi5a\EAA System\2اوامر التدريب.xlsx";
+    private string _excelFilePath = string.Empty;
+
+    [ObservableProperty]
+    private string _selectedFileName = string.Empty;
+
+    [ObservableProperty]
+    private string _selectedFileSizeText = string.Empty;
+
+    [ObservableProperty]
+    private string _selectedFileDateText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasSelectedFile;
 
     [ObservableProperty]
     private bool _isSyncing;
@@ -31,6 +43,91 @@ public partial class ExcelSyncViewModel : ObservableObject
     {
         _excelService = excelService;
         _dbService = dbService;
+        AutoDetectDefaultFile();
+    }
+
+    public void SetFilePath(string? path)
+    {
+        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
+        {
+            ExcelFilePath = path;
+            try
+            {
+                var fi = new FileInfo(path);
+                SelectedFileName = fi.Name;
+                double kb = fi.Length / 1024.0;
+                SelectedFileSizeText = kb >= 1024 ? $"{kb / 1024.0:F2} MB" : $"{kb:F0} KB";
+                SelectedFileDateText = $"آخر تعديل: {fi.LastWriteTime:yyyy/MM/dd HH:mm}";
+                HasSelectedFile = true;
+                SyncProgressText = "جاهز للاستيراد ومعالجة البيانات بنقرة واحدة";
+            }
+            catch
+            {
+                SelectedFileName = Path.GetFileName(path);
+                SelectedFileSizeText = string.Empty;
+                SelectedFileDateText = string.Empty;
+                HasSelectedFile = true;
+                SyncProgressText = "جاهز للمزامنة";
+            }
+        }
+        else
+        {
+            ExcelFilePath = string.Empty;
+            SelectedFileName = string.Empty;
+            SelectedFileSizeText = string.Empty;
+            SelectedFileDateText = string.Empty;
+            HasSelectedFile = false;
+            SyncProgressText = "يرجى اختيار ملف إكسيل صالح (.xlsx)";
+        }
+    }
+
+    public void AutoDetectDefaultFile()
+    {
+        // 1. Check workspace / standard hardcoded path if it exists
+        string primaryPath = @"C:\Users\Mi5a\EAA System\2اوامر التدريب.xlsx";
+        if (File.Exists(primaryPath))
+        {
+            SetFilePath(primaryPath);
+            return;
+        }
+
+        // 2. Search common folders: current directory, base directory, EAA folder, Desktop
+        string[] searchDirs = [
+            AppDomain.CurrentDomain.BaseDirectory,
+            Environment.CurrentDirectory,
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "EAA System"),
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
+        ];
+
+        foreach (var dir in searchDirs)
+        {
+            if (!Directory.Exists(dir)) continue;
+
+            string standardFile = Path.Combine(dir, "2اوامر التدريب.xlsx");
+            if (File.Exists(standardFile))
+            {
+                SetFilePath(standardFile);
+                return;
+            }
+
+            try
+            {
+                var candidates = Directory.GetFiles(dir, "*.xlsx");
+                foreach (var c in candidates)
+                {
+                    string name = Path.GetFileName(c);
+                    if (name.Contains("اوامر") || name.Contains("تدريب") || name.Contains("Training"))
+                    {
+                        SetFilePath(c);
+                        return;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        // Fallback: clear selection so user sees friendly browse button
+        SetFilePath(null);
     }
 
     [RelayCommand]
@@ -38,7 +135,7 @@ public partial class ExcelSyncViewModel : ObservableObject
     {
         if (string.IsNullOrWhiteSpace(ExcelFilePath) || !File.Exists(ExcelFilePath))
         {
-            SyncProgressText = "الملف المحدد غير موجود!";
+            SyncProgressText = "الملف المحدد غير موجود! يرجى اختيار ملف إكسيل أولاً.";
             return;
         }
 

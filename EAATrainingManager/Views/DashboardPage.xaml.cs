@@ -79,17 +79,9 @@ public sealed partial class DashboardPage : Page
         }
     }
 
-    private async void BtnQuickImport_Click(object sender, RoutedEventArgs e)
+    private void BtnQuickImport_Click(object sender, RoutedEventArgs e)
     {
-        StatusInfoBar.IsOpen = true;
-        StatusInfoBar.Severity = InfoBarSeverity.Informational;
-        StatusInfoBar.Message = "جاري استيراد وتفكيك سجلات 2اوامر التدريب.xlsx...";
-
-        await ViewModel.QuickImportDefaultExcelAsync();
-        UpdateUI();
-
-        StatusInfoBar.Severity = InfoBarSeverity.Success;
-        StatusInfoBar.Message = ViewModel.StatusMessage;
+        MainWindow.Current?.NavigateTo(typeof(ExcelSyncPage));
     }
 
     private async System.Threading.Tasks.Task LoadDataAsync()
@@ -127,7 +119,7 @@ public sealed partial class DashboardPage : Page
         if (TxtExportConsular != null) TxtExportConsular.Text = isEn ? "International Roster" : "كشف الوافدين";
         if (TxtBtnAddOrder != null) TxtBtnAddOrder.Text = isEn ? "New Order" : "أمر تدريب جديد";
         if (TxtBtnOpenArchive != null) TxtBtnOpenArchive.Text = isEn ? "Archive" : "الأرشيف";
-        if (TxtQuickImport != null) TxtQuickImport.Text = isEn ? "Quick Sync" : "مزامنة سريعة";
+        if (TxtQuickImport != null) TxtQuickImport.Text = isEn ? "Import & Sync Excel" : "استيراد وتحديث الإكسيل";
 
         if (TxtKpiStudentsTitle != null) TxtKpiStudentsTitle.Text = isEn ? "Total Unique Trainees" : "إجمالي الطلبة الفعليين";
         if (TxtKpiStudentsPill != null) TxtKpiStudentsPill.Text = isEn ? "Actual Headcount" : "الرؤوس الفعلية";

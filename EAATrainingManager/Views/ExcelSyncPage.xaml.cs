@@ -1,6 +1,13 @@
 using System;
+using System.IO;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+using EAATrainingManager.Helpers;
+using EAATrainingManager.Services;
 using EAATrainingManager.ViewModels;
 
 namespace EAATrainingManager.Views;
@@ -21,7 +28,7 @@ public sealed partial class ExcelSyncPage : Page
         try
         {
             ApplyLocalization();
-            if (TxtFilePath != null) TxtFilePath.Text = ViewModel.ExcelFilePath;
+            UpdateFileSelectionUI();
             if (LogsItemsControl != null) LogsItemsControl.ItemsSource = ViewModel.SyncLogs;
         }
         catch (Exception ex)
@@ -30,9 +37,45 @@ public sealed partial class ExcelSyncPage : Page
         }
     }
 
+    private void UpdateFileSelectionUI()
+    {
+        bool hasFile = ViewModel.HasSelectedFile && !string.IsNullOrWhiteSpace(ViewModel.ExcelFilePath) && File.Exists(ViewModel.ExcelFilePath);
+        var loc = LocalizationService.Instance;
+
+        if (PanelFileSelected != null)
+            PanelFileSelected.Visibility = hasFile ? Visibility.Visible : Visibility.Collapsed;
+
+        if (PanelNoFile != null)
+            PanelNoFile.Visibility = hasFile ? Visibility.Collapsed : Visibility.Visible;
+
+        if (hasFile)
+        {
+            if (TxtSelectedFileName != null) TxtSelectedFileName.Text = ViewModel.SelectedFileName;
+            if (TxtSelectedFileSize != null) TxtSelectedFileSize.Text = ViewModel.SelectedFileSizeText;
+            if (TxtSelectedFileDate != null) TxtSelectedFileDate.Text = ViewModel.SelectedFileDateText;
+            if (TxtSelectedFullPath != null) TxtSelectedFullPath.Text = ViewModel.ExcelFilePath;
+            if (TxtFileReadyBadge != null) TxtFileReadyBadge.Text = loc.Text("✔ جاهز للاستيراد", "✔ Ready to Ingest");
+            if (BtnStartImport != null) BtnStartImport.IsEnabled = !ViewModel.IsSyncing;
+            if (TxtImportStatus != null)
+            {
+                TxtImportStatus.Text = ViewModel.SyncProgressText;
+                TxtImportStatus.Foreground = new SolidColorBrush(Colors.ForestGreen);
+            }
+        }
+        else
+        {
+            if (BtnStartImport != null) BtnStartImport.IsEnabled = false;
+            if (TxtImportStatus != null)
+            {
+                TxtImportStatus.Text = loc.Text("يرجى اختيار ملف الإكسيل للمتابعة", "Please select an Excel file to proceed");
+                TxtImportStatus.Foreground = new SolidColorBrush(Colors.DarkOrange);
+            }
+        }
+    }
+
     private void ApplyLocalization()
     {
-        var loc = EAATrainingManager.Services.LocalizationService.Instance;
+        var loc = LocalizationService.Instance;
         if (TxtPageTitle != null)
             TxtPageTitle.Text = loc.Text("مزامنة واستيراد ملفات الإكسيل (ClosedXML)", "Smart Excel Synchronization & Ingestion (ClosedXML)");
         if (TxtPageDesc != null)
@@ -41,13 +84,22 @@ public sealed partial class ExcelSyncPage : Page
 
         if (TxtImportCardTitle != null)
             TxtImportCardTitle.Text = loc.Text("استيراد وتفكيك سجلات التدريب", "Ingest & Deconstruct Training Records");
-        if (TxtSourcePathLabel != null)
-            TxtSourcePathLabel.Text = loc.Text("مسار ملف الإكسيل المصدر:", "Source Excel File Path:");
+        if (TxtImportCardSubtitle != null)
+            TxtImportCardSubtitle.Text = loc.Text("اختر ملف الإكسيل أو اسحبه هنا بنقرة واحدة دون كتابة أي مسارات",
+                                                 "Select or drag & drop your Excel file here in 1 click without typing paths");
+
+        if (TxtBtnChangeFile != null)
+            TxtBtnChangeFile.Text = loc.Text("تغيير الملف", "Change File");
+        if (TxtDropPrompt != null)
+            TxtDropPrompt.Text = loc.Text("اسحب ملف الإكسيل هنا، أو اضغط للاختيار من جهازك", "Drag Excel file here, or click to browse");
+        if (TxtBtnBrowseEmpty != null)
+            TxtBtnBrowseEmpty.Text = loc.Text("اختيار ملف الإكسيل (تصفح)...", "Browse Excel File...");
+
+        if (TxtImportNotesHeader != null)
+            TxtImportNotesHeader.Text = loc.Text("المعالجة التلقائية الذكية:", "Automated Intelligent Ingestion:");
         if (TxtImportNotes != null)
-            TxtImportNotes.Text = loc.Text("* يتم تلقائياً قراءة أوراق العمل (تقييم د، نظام حر 61، نظام 141، خط جوي، تجديد طراز) وتوحيد أسماء المتدربين وفصل الرؤوس عن الأوامر.",
+            TxtImportNotes.Text = loc.Text("* يتم تلقائياً قراءة كافة أوراق العمل (تقييم د، نظام حر 61، نظام 141، خط جوي، تجديد طراز) وتوحيد أسماء المتدربين وفصل الرؤوس عن الأوامر.",
                                            "* Automatically parses worksheets (Evaluation, Part 61, Part 141, ATP, Type Rating), deduplicates trainees, and purges headers.");
-        if (TxtImportStatus != null)
-            TxtImportStatus.Text = loc.Text("جاهز للمزامنة", "Ready to Sync");
         if (TxtStartImportBtn != null)
             TxtStartImportBtn.Text = loc.Text("بدء استيراد ومعالجة البيانات", "Start Import & Processing");
 
@@ -74,10 +126,96 @@ public sealed partial class ExcelSyncPage : Page
             BtnClearLogs.Content = loc.Text("مسح السجل", "Clear Log");
     }
 
+    private async void BtnBrowseFile_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var chosenPath = await FilePickerHelper.PickExcelFileAsync(App.MainWindowInstance ?? MainWindow.Current);
+            if (!string.IsNullOrWhiteSpace(chosenPath) && File.Exists(chosenPath))
+            {
+                ViewModel.SetFilePath(chosenPath);
+                UpdateFileSelectionUI();
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[BtnBrowseFile_Click] {ex}");
+        }
+    }
+
+    private void DropZone_DragOver(object sender, DragEventArgs e)
+    {
+        if (e.DataView.Contains(StandardDataFormats.StorageItems))
+        {
+            e.AcceptedOperation = DataPackageOperation.Copy;
+            e.DragUIOverride.Caption = LocalizationService.Instance.IsEnglish ? "Drop Excel Workbook Here" : "أفلت ملف الإكسيل هنا";
+            e.DragUIOverride.IsCaptionVisible = true;
+            e.DragUIOverride.IsGlyphVisible = true;
+
+            if (DropZoneBorder != null)
+            {
+                DropZoneBorder.BorderBrush = new SolidColorBrush(Colors.DodgerBlue);
+                DropZoneBorder.Background = new SolidColorBrush(ColorHelper.FromArgb(30, 13, 110, 253));
+            }
+        }
+        else
+        {
+            e.AcceptedOperation = DataPackageOperation.None;
+        }
+    }
+
+    private void DropZone_DragLeave(object sender, DragEventArgs e)
+    {
+        ResetDropZoneVisual();
+    }
+
+    private async void DropZone_Drop(object sender, DragEventArgs e)
+    {
+        ResetDropZoneVisual();
+        try
+        {
+            if (e.DataView.Contains(StandardDataFormats.StorageItems))
+            {
+                var items = await e.DataView.GetStorageItemsAsync();
+                foreach (var item in items)
+                {
+                    if (item is StorageFile file)
+                    {
+                        string ext = Path.GetExtension(file.Path).ToLowerInvariant();
+                        if (ext == ".xlsx" || ext == ".xls")
+                        {
+                            ViewModel.SetFilePath(file.Path);
+                            UpdateFileSelectionUI();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[DropZone_Drop] {ex}");
+        }
+    }
+
+    private void ResetDropZoneVisual()
+    {
+        if (DropZoneBorder != null)
+        {
+            DropZoneBorder.ClearValue(Border.BorderBrushProperty);
+            DropZoneBorder.ClearValue(Border.BackgroundProperty);
+        }
+    }
+
     private async void BtnStartImport_Click(object sender, RoutedEventArgs e)
     {
-        if (TxtFilePath == null || BtnStartImport == null) return;
-        ViewModel.ExcelFilePath = TxtFilePath.Text.Trim();
+        if (BtnStartImport == null) return;
+        if (!ViewModel.HasSelectedFile || string.IsNullOrWhiteSpace(ViewModel.ExcelFilePath))
+        {
+            BtnBrowseFile_Click(sender, e);
+            return;
+        }
+
         if (ImportProgressBar != null)
         {
             ImportProgressBar.Visibility = Visibility.Visible;

@@ -50,6 +50,19 @@
 
                 <!-- Right / End: Quick Action Tool Buttons -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <!-- 0. Quick Excel Import Shortcut -->
+                    <Button x:Name="BtnTitleExcelImport"
+                            Click="BtnTitleExcelImport_Click"
+                            Padding="10,5"
+                            CornerRadius="14"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            ToolTipService.ToolTip="استيراد وتحديث ملف الإكسيل (Excel Sync)">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE8B5;" FontSize="12" Foreground="#198754" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleExcelImport" Text="استيراد إكسيل" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+
                     <!-- 1. Add New Order Modal Trigger -->
                     <Button x:Name="BtnTitleAddOrder"
                             Click="BtnTitleAddOrder_Click"
@@ -98,6 +111,19 @@
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <FontIcon Glyph="&#xE774;" FontSize="13" Foreground="#0D6EFD" />
                             <TextBlock x:Name="TxtTitleLangBadge" Text="English" FontWeight="Bold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 5. Window Control: Minimize to Taskbar Button -->
+                    <Button x:Name="BtnTitleMinimize"
+                            Click="BtnTitleMinimize_Click"
+                            Padding="10,5"
+                            CornerRadius="14"
+                            Background="{ThemeResource LayerFillColorAltBrush}"
+                            ToolTipService.ToolTip="تصغير النافذة لشريط المهام (Minimize)">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE921;" FontSize="12" Foreground="{ThemeResource TextFillColorPrimaryBrush}" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleMinimize" Text="تصغير" FontWeight="SemiBold" FontSize="12" />
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -189,7 +215,7 @@
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
 
-                <NavigationViewItem x:Name="NavItemExcelSync" Tag="ExcelSync" Content="استيراد وتصدير الذكي">
+                <NavigationViewItem x:Name="NavItemExcelSync" Tag="ExcelSync" Content="استيراد وتحديث الإكسيل">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8B5;" FlowDirection="LeftToRight" />
                     </NavigationViewItem.Icon>

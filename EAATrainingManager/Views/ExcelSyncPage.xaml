@@ -60,40 +60,145 @@
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
 
-                    <!-- Ingest / Import Card -->
+                    <!-- Ingest / Import Card: Foolproof Non-Tech-Savvy Friendly -->
                     <Border x:Name="CardImport" Grid.Row="0" Grid.Column="0" Style="{StaticResource FluentCardBorder}">
-                        <StackPanel Spacing="12">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE8B5;" Foreground="#0D6EFD" FlowDirection="LeftToRight" />
-                                <TextBlock x:Name="TxtImportCardTitle" Text="استيراد وتفكيك سجلات التدريب" FontSize="16" FontWeight="Bold" />
+                        <StackPanel Spacing="14">
+                            <!-- Card Header -->
+                            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                <Border Background="#1A0D6EFD" CornerRadius="8" Padding="8">
+                                    <FontIcon Glyph="&#xE8B5;" Foreground="#0D6EFD" FontSize="18" FlowDirection="LeftToRight" />
+                                </Border>
+                                <StackPanel Spacing="2">
+                                    <TextBlock x:Name="TxtImportCardTitle" Text="استيراد وتفكيك سجلات التدريب" FontSize="16" FontWeight="Bold" />
+                                    <TextBlock x:Name="TxtImportCardSubtitle" Text="اختر ملف الإكسيل أو اسحبه هنا بنقرة واحدة دون كتابة أي مسارات" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
                             </StackPanel>
 
-                            <TextBlock x:Name="TxtSourcePathLabel" Text="مسار ملف الإكسيل المصدر:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            
-                            <TextBox x:Name="TxtFilePath" 
-                                     Text="C:\Users\Mi5a\EAA System\2اوامر التدريب.xlsx" 
-                                     CornerRadius="8" 
-                                     FlowDirection="LeftToRight" 
-                                     TextAlignment="Left" />
+                            <!-- Interactive Drop Zone & Visual File Picker -->
+                            <Border x:Name="DropZoneBorder"
+                                    AllowDrop="True"
+                                    DragOver="DropZone_DragOver"
+                                    DragLeave="DropZone_DragLeave"
+                                    Drop="DropZone_Drop"
+                                    CornerRadius="10"
+                                    BorderThickness="2"
+                                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                                    Background="{ThemeResource LayerFillColorAltBrush}"
+                                    Padding="14">
+                                <Grid>
+                                    <!-- State 1: File Selected Card -->
+                                    <StackPanel x:Name="PanelFileSelected" Spacing="10">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
 
-                            <TextBlock x:Name="TxtImportNotes" 
-                                       Text="* يتم تلقائياً قراءة أوراق العمل (تقييم د، نظام حر 61، نظام 141، خط جوي، تجديد طراز) وتوحيد أسماء المتدربين وفصل الرؤوس عن الأوامر." 
-                                       FontSize="11" 
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
-                                       TextWrapping="Wrap" />
+                                            <!-- Green Excel Badge Icon -->
+                                            <Border Grid.Column="0" Background="#1A198754" CornerRadius="10" Width="46" Height="46" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <FontIcon Glyph="&#xE9F9;" Foreground="#198754" FontSize="22" FlowDirection="LeftToRight" />
+                                            </Border>
 
+                                            <!-- File Information & Status Badge -->
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                                    <TextBlock x:Name="TxtSelectedFileName" Text="2اوامر التدريب.xlsx" FontWeight="Bold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                                                    <Border Background="#1A198754" CornerRadius="6" Padding="6,2">
+                                                        <TextBlock x:Name="TxtFileReadyBadge" Text="✔ جاهز للاستيراد" FontSize="11" FontWeight="SemiBold" Foreground="#198754" />
+                                                    </Border>
+                                                </StackPanel>
+                                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                                    <TextBlock x:Name="TxtSelectedFileSize" Text="1.4 MB" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock Text="•" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                    <TextBlock x:Name="TxtSelectedFileDate" Text="آخر تعديل: اليوم" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                            </StackPanel>
+
+                                            <!-- Change / Choose Another File Button -->
+                                            <Button Grid.Column="2" 
+                                                    x:Name="BtnChangeFile" 
+                                                    Click="BtnBrowseFile_Click" 
+                                                    Padding="12,6" 
+                                                    CornerRadius="8"
+                                                    VerticalAlignment="Center"
+                                                    ToolTipService.ToolTip="اختيار ملف آخر من جهازك">
+                                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                                    <FontIcon Glyph="&#xE8E5;" FontSize="12" FlowDirection="LeftToRight" />
+                                                    <TextBlock x:Name="TxtBtnChangeFile" Text="تغيير الملف" FontSize="12" />
+                                                </StackPanel>
+                                            </Button>
+                                        </Grid>
+
+                                        <!-- Clean path preview for clarity without input confusion -->
+                                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}" CornerRadius="6" Padding="8,4">
+                                            <Grid ColumnSpacing="6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <FontIcon Grid.Column="0" Glyph="&#xE8B7;" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FlowDirection="LeftToRight" VerticalAlignment="Center" />
+                                                <TextBlock Grid.Column="1" 
+                                                           x:Name="TxtSelectedFullPath" 
+                                                           Text="C:\Users\..." 
+                                                           FontSize="10" 
+                                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                                                           TextTrimming="CharacterEllipsis" 
+                                                           FlowDirection="LeftToRight" 
+                                                           VerticalAlignment="Center" />
+                                            </Grid>
+                                        </Border>
+                                    </StackPanel>
+
+                                    <!-- State 2: No File Selected Prompt -->
+                                    <StackPanel x:Name="PanelNoFile" Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="12" Visibility="Collapsed">
+                                        <FontIcon Glyph="&#xE8E5;" FontSize="32" Foreground="#0D6EFD" FlowDirection="LeftToRight" HorizontalAlignment="Center" />
+                                        <TextBlock x:Name="TxtDropPrompt" Text="اسحب ملف الإكسيل هنا، أو اضغط للاختيار من جهازك" FontWeight="SemiBold" FontSize="13" HorizontalAlignment="Center" />
+                                        <Button x:Name="BtnBrowseFileEmpty" 
+                                                Click="BtnBrowseFile_Click" 
+                                                Style="{StaticResource AccentButtonStyle}" 
+                                                Padding="16,8" 
+                                                CornerRadius="8"
+                                                HorizontalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <FontIcon Glyph="&#xE8E5;" FlowDirection="LeftToRight" FontSize="13" />
+                                                <TextBlock x:Name="TxtBtnBrowseEmpty" Text="اختيار ملف الإكسيل (تصفح)..." FontSize="12" FontWeight="SemiBold" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Explanatory Notes & Auto-Parsing Features -->
+                            <Border Background="{ThemeResource LayerFillColorAltBrush}" CornerRadius="8" Padding="10">
+                                <StackPanel Spacing="4">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE946;" FontSize="13" Foreground="#0D6EFD" FlowDirection="LeftToRight" />
+                                        <TextBlock x:Name="TxtImportNotesHeader" Text="المعالجة التلقائية الذكية:" FontWeight="SemiBold" FontSize="11" Foreground="#0D6EFD" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="TxtImportNotes" 
+                                               Text="* يتم تلقائياً قراءة كافة أوراق العمل (تقييم د، نظام حر 61، نظام 141، خط جوي، تجديد طراز) وتوحيد أسماء المتدربين وفصل الرؤوس عن الأوامر." 
+                                               FontSize="11" 
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Progress Bar & Status -->
                             <ProgressBar x:Name="ImportProgressBar" IsIndeterminate="False" Height="6" Visibility="Collapsed" />
 
-                            <TextBlock x:Name="TxtImportStatus" Text="جاهز للمزامنة" FontSize="12" FontWeight="SemiBold" Foreground="#0D6EFD" />
+                            <TextBlock x:Name="TxtImportStatus" Text="جاهز للمزامنة" FontSize="12" FontWeight="SemiBold" Foreground="#198754" />
 
+                            <!-- Primary Action Button -->
                             <Button x:Name="BtnStartImport" 
                                     Click="BtnStartImport_Click" 
                                     Style="{StaticResource AccentButtonStyle}" 
-                                    Padding="16,8,16,8" 
+                                    Padding="16,10,16,10" 
+                                    CornerRadius="8"
                                     HorizontalAlignment="Stretch">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-                                    <FontIcon Glyph="&#xE898;" FlowDirection="LeftToRight" />
-                                    <TextBlock x:Name="TxtStartImportBtn" Text="بدء استيراد ومعالجة البيانات" />
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                                    <FontIcon Glyph="&#xE898;" FontSize="15" FlowDirection="LeftToRight" />
+                                    <TextBlock x:Name="TxtStartImportBtn" Text="بدء استيراد ومعالجة البيانات" FontSize="13" FontWeight="Bold" />
                                 </StackPanel>
                             </Button>
                         </StackPanel>

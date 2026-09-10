@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     One-Click Automated Release & In-App Updater Deployment for EAA Training Management System.
 #>
@@ -93,7 +93,7 @@ Write-Host "`n>>> Target Release Tag: $Tag" -ForegroundColor Magenta
 
 # 2. Prepare Release Title and Description
 if (-not $Title) {
-    $Title = "v$Version - Operational Release (Private Updates & Auto-Sync)"
+    $Title = "v$Version - Foolproof Excel Ingestion, Minimize Control & In-App Delta Patch"
 }
 
 if (-not $Notes) {
@@ -101,8 +101,10 @@ if (-not $Notes) {
 ## Egyptian Aviation Academy (EAA) Training Management System v$Version
 
 ### Key Updates & Enhancements:
-- **Optimized UI Layout**: Fixed title bar header alignment, widened data columns, and resolved text/button squeezing across all directories and dashboards.
-- **Private Repository Delta Updates**: In-app one-click update detection and background patch delivery via authenticated REST API.
+- **Foolproof Excel Ingestion**: Completely removed manual path / URL entry. Non-technical staff can now browse and select Excel workbooks with a single click, drag and drop files onto the interactive drop zone, and benefit from automatic file detection.
+- **Window Minimize Control**: Added a dedicated Minimize button in the title bar and enabled `OverlappedPresenter.IsMinimizable` so staff can minimize the terminal to the Windows taskbar without quitting.
+- **Enhanced In-App Navigation**: Added 1-click Excel Import shortcuts directly in the title bar header and dashboard.
+- **Private Repository Delta Updates**: In-app one-click update detection and background micro patch delivery (~750 KB) via authenticated GitHub REST API.
 - **Unified Student & Trainee Directory**: Real-time deduplication linking historical courses and milestones (PPL -> CPL/IR -> ATP).
 - **Consular & Authority Export**: Instant 1-click export of accredited international cadet rosters.
 - **SQLite Engine & Excel Mirroring**: High-performance offline database with background Excel snapshot mirroring.
@@ -112,15 +114,33 @@ if (-not $Notes) {
 "@
 }
 
+# 2b. Update EAATrainingManager.csproj & UpdateService.cs Version Tags Prior to Build
+Write-Host "`n[1/6] Updating project version references to $Version..." -ForegroundColor Cyan
+$CsprojPath = Join-Path $ScriptRoot "EAATrainingManager\EAATrainingManager.csproj"
+$csprojContent = [System.IO.File]::ReadAllText($CsprojPath, [System.Text.Encoding]::UTF8)
+$csprojContent = [System.Text.RegularExpressions.Regex]::Replace($csprojContent, "<Version>.*?</Version>", "<Version>$Version</Version>")
+$csprojContent = [System.Text.RegularExpressions.Regex]::Replace($csprojContent, "<AssemblyVersion>.*?</AssemblyVersion>", "<AssemblyVersion>$Version.0</AssemblyVersion>")
+$csprojContent = [System.Text.RegularExpressions.Regex]::Replace($csprojContent, "<FileVersion>.*?</FileVersion>", "<FileVersion>$Version.0</FileVersion>")
+[System.IO.File]::WriteAllText($CsprojPath, $csprojContent, [System.Text.Encoding]::UTF8)
+
+$updateServicePath = Join-Path $ScriptRoot "EAATrainingManager\Services\UpdateService.cs"
+if (Test-Path $updateServicePath) {
+    $serviceContent = [System.IO.File]::ReadAllText($updateServicePath, [System.Text.Encoding]::UTF8)
+    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string CurrentVersion \{ get; \} = ".*?";', 'public string CurrentVersion { get; } = "' + $Version + '";')
+    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string LatestVersion \{ get; set; } = ".*?";', 'public string LatestVersion { get; set; } = "' + $Version + '";')
+    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'private const string CurrentAppVersion = ".*?";', 'private const string CurrentAppVersion = "' + $Version + '";')
+    [System.IO.File]::WriteAllText($updateServicePath, $serviceContent, [System.Text.Encoding]::UTF8)
+}
+Write-Host "  -> Project files updated to version $Version." -ForegroundColor Green
+
 # 3. Compile Executables (Modular Runtime & Standalone Single-File)
 $PublishDir = Join-Path $ScriptRoot "Publish"
 $StandaloneDir = Join-Path $ScriptRoot "bin\standalone"
-$CsprojPath = Join-Path $ScriptRoot "EAATrainingManager\EAATrainingManager.csproj"
 $ExePath = Join-Path $StandaloneDir "EAATrainingManager.exe"
 $deltaZipPath = Join-Path $ScriptRoot "EAA_Delta_Patch_$Tag.zip"
 
 if (-not $SkipBuild) {
-    Write-Host "`n[1/6] Building Modular Runtime in $PublishDir..." -ForegroundColor Cyan
+    Write-Host "`n[2/6] Building Modular Runtime in $PublishDir..." -ForegroundColor Cyan
     dotnet publish $CsprojPath -c Release -r win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=false -o $PublishDir
     if ($LASTEXITCODE -ne 0) {
         Write-Error "dotnet publish (modular) failed with exit code $LASTEXITCODE"
@@ -172,19 +192,11 @@ try {
 }
 
 # 5. Update update_manifest.json with True Delta Metrics
-Write-Host "`n[3/6] Updating update_manifest.json..." -ForegroundColor Cyan
+Write-Host "`n[4/6] Updating update_manifest.json..." -ForegroundColor Cyan
 $todayDate = (Get-Date).ToString("yyyy-MM-dd")
 
-$notesAr = "EAA Training Management System v$Version"
-if (Test-Path $ManifestPath) {
-    try {
-        $existingManifest = Get-Content $ManifestPath -Raw -Encoding UTF8 | ConvertFrom-Json
-        if ($existingManifest.releaseNotes) {
-            $notesAr = [System.Text.RegularExpressions.Regex]::Replace($existingManifest.releaseNotes, "v\d+\.\d+\.\d+", "v$Version")
-        }
-    } catch { }
-}
-$notesEn = "Update v$Version - Enhanced UI layout, perfect table alignment, and lightweight delta updater."
+$notesAr = "تحديث v$Version - تيسير استيراد ملفات الإكسيل بالكامل بالسحب والإفلات والتصفح البصري، وإضافة زر تصغير النافذة لشريط المهام، مع حزمة تحديث خفيفة مدمجة (Delta Patch)."
+$notesEn = "Update v$Version - Foolproof visual Excel file selection & drag-and-drop, title bar minimize button, and lightweight in-app delta updater."
 
 $manifestObj = [ordered]@{
     version = $Version
@@ -199,24 +211,6 @@ $manifestObj = [ordered]@{
 $manifestContent = ($manifestObj | ConvertTo-Json -Depth 4) + "`n"
 [System.IO.File]::WriteAllText($ManifestPath, $manifestContent, [System.Text.Encoding]::UTF8)
 Write-Host "  -> Manifest updated for version $Version with true delta size: $deltaSizeMb MB." -ForegroundColor Green
-
-# 6. Update EAATrainingManager.csproj Version Tags
-Write-Host "`n[4/6] Updating project version references..." -ForegroundColor Cyan
-$csprojContent = [System.IO.File]::ReadAllText($CsprojPath, [System.Text.Encoding]::UTF8)
-$csprojContent = [System.Text.RegularExpressions.Regex]::Replace($csprojContent, "<Version>.*?</Version>", "<Version>$Version</Version>")
-$csprojContent = [System.Text.RegularExpressions.Regex]::Replace($csprojContent, "<AssemblyVersion>.*?</AssemblyVersion>", "<AssemblyVersion>$Version.0</AssemblyVersion>")
-$csprojContent = [System.Text.RegularExpressions.Regex]::Replace($csprojContent, "<FileVersion>.*?</FileVersion>", "<FileVersion>$Version.0</FileVersion>")
-[System.IO.File]::WriteAllText($CsprojPath, $csprojContent, [System.Text.Encoding]::UTF8)
-
-# 7. Update UpdateService.cs Version Constants
-$updateServicePath = Join-Path $ScriptRoot "EAATrainingManager\Services\UpdateService.cs"
-if (Test-Path $updateServicePath) {
-    $serviceContent = [System.IO.File]::ReadAllText($updateServicePath, [System.Text.Encoding]::UTF8)
-    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string CurrentVersion \{ get; \} = ".*?";', 'public string CurrentVersion { get; } = "' + $Version + '";')
-    $serviceContent = [System.Text.RegularExpressions.Regex]::Replace($serviceContent, 'public string LatestVersion \{ get; set; } = ".*?";', 'public string LatestVersion { get; set; } = "' + $Version + '";')
-    [System.IO.File]::WriteAllText($updateServicePath, $serviceContent, [System.Text.Encoding]::UTF8)
-}
-Write-Host "  -> Project files updated to version $Version." -ForegroundColor Green
 
 # 8. Create / Update Standalone ZIP Archive
 Write-Host "`n[5/6] Creating Full Standalone Zip Archive..." -ForegroundColor Cyan

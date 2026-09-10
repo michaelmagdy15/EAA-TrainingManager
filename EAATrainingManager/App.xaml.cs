@@ -8,6 +8,7 @@ namespace EAATrainingManager;
 public partial class App : Application
 {
     private Window? _window;
+    public static Window? MainWindowInstance { get; private set; }
     private static System.Threading.Mutex? _singleInstanceMutex;
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]
@@ -69,6 +70,7 @@ public partial class App : Application
     {
         if (_window != null) return;
         _window = new MainWindow();
+        MainWindowInstance = _window;
         _window.Activate();
     }
 
