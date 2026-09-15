@@ -612,6 +612,178 @@ class Program
             failures++;
         }
 
+        // TEST SUITE 16: Scheduling Conflict Prevention & Daily Operations Board
+        Console.WriteLine("\n[TEST SUITE 16] Testing Training Session Scheduling & Conflict Prevention...");
+        try
+        {
+            await db.ClearAllDataAsync();
+            int studentA = await db.GetOrCreateStudentAsync("Scheduler Student A");
+            int studentB = await db.GetOrCreateStudentAsync("Scheduler Student B");
+            int studentC = await db.GetOrCreateStudentAsync("Scheduler Student C");
+            await db.SaveAircraftResourceAsync(new AircraftResource
+            {
+                Registration = "SU-EAA",
+                ResourceType = "Aircraft",
+                AircraftType = "C172",
+                Status = "Available",
+                HobbsHours = 100
+            });
+            await db.SaveAircraftResourceAsync(new AircraftResource
+            {
+                Registration = "SU-MNT",
+                ResourceType = "Aircraft",
+                AircraftType = "C172",
+                Status = "Available",
+                HobbsHours = 200,
+                MaintenanceDueAtHours = 200
+            });
+            AssertTrue(await db.IsResourceDispatchableAsync("SU-EAA"), "Available aircraft is dispatchable");
+            AssertTrue(!await db.IsResourceDispatchableAsync("SU-MNT"), "Maintenance-due aircraft is blocked");
+            int expiredMedicalId = await db.SaveComplianceRecordAsync(new ComplianceRecord
+            {
+                StudentId = studentC,
+                RecordType = "Medical",
+                IssuedAt = DateTime.Today.AddYears(-1),
+                ExpiresAt = DateTime.Today.AddDays(-1),
+                IsVerified = true
+            });
+            AssertTrue(expiredMedicalId > 0, "Expired medical record is saved");
+            AssertTrue(await db.HasExpiredVerifiedComplianceAsync(studentC), "Expired verified medical is detected");
+            var start = DateTime.Today.AddHours(9);
+            var end = start.AddHours(2);
+
+            int sessionId = await db.ScheduleTrainingSessionAsync(new TrainingSession
+            {
+                StudentId = studentA,
+                RegulatoryTrack = "Part141",
+                LessonTitle = "Stage 1 Flight",
+                InstructorName = "CFI One",
+                ResourceName = "SU-EAA",
+                StartAt = start,
+                EndAt = end
+            });
+            AssertTrue(sessionId > 0, "Session was scheduled");
+
+            var sessions = await db.GetTrainingSessionsAsync(DateTime.Today);
+            AssertEquals(1, sessions.Count, "Daily schedule returns the session");
+            AssertEquals("Scheduled", sessions[0].Status, "New session is scheduled");
+
+            bool conflictDetected = false;
+            try
+            {
+                await db.ScheduleTrainingSessionAsync(new TrainingSession
+                {
+                    StudentId = studentB,
+                    LessonTitle = "Conflicting Flight",
+                    InstructorName = "CFI One",
+                    ResourceName = "SU-EAB",
+                    StartAt = start.AddMinutes(30),
+                    EndAt = end.AddMinutes(30)
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                conflictDetected = true;
+            }
+            AssertTrue(conflictDetected, "Instructor overlap is rejected");
+
+            bool maintenanceBlockDetected = false;
+            try
+            {
+                await db.ScheduleTrainingSessionAsync(new TrainingSession
+                {
+                    StudentId = studentB,
+                    LessonTitle = "Maintenance Blocked Flight",
+                    ResourceName = "SU-MNT",
+                    StartAt = end.AddHours(1),
+                    EndAt = end.AddHours(2)
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                maintenanceBlockDetected = true;
+            }
+            AssertTrue(maintenanceBlockDetected, "Maintenance-due aircraft cannot be scheduled");
+
+            bool complianceBlockDetected = false;
+            try
+            {
+                await db.ScheduleTrainingSessionAsync(new TrainingSession
+                {
+                    StudentId = studentC,
+                    LessonTitle = "Compliance Blocked Flight",
+                    StartAt = end.AddHours(3),
+                    EndAt = end.AddHours(4)
+                });
+            }
+            catch (InvalidOperationException)
+            {
+                complianceBlockDetected = true;
+            }
+            AssertTrue(complianceBlockDetected, "Expired compliance blocks scheduling");
+
+            AssertTrue(await db.UpdateTrainingSessionStatusAsync(sessionId, "Completed"), "Session status updates");
+            sessions = await db.GetTrainingSessionsAsync(DateTime.Today);
+            AssertEquals("Completed", sessions[0].Status, "Completed status persists");
+            var sessionAudit = await db.GetAuditEventsAsync("TrainingSession", sessionId);
+            AssertTrue(sessionAudit.Exists(e => e.Action == "Created"), "Session creation is audited");
+            AssertTrue(sessionAudit.Exists(e => e.Action == "StatusChanged"), "Session status change is audited");
+            Console.WriteLine("  ✓ Training session scheduling & conflict prevention PASSED!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  ✖ TEST SUITE 16 FAILED: {ex.Message}");
+            failures++;
+        }
+
+        // TEST SUITE 17: Electronic Flight Records & Fleet Utilization Evidence
+        Console.WriteLine("\n[TEST SUITE 17] Testing Flight Records & Aircraft Hour Updates...");
+        try
+        {
+            await db.ClearAllDataAsync();
+            int studentId = await db.GetOrCreateStudentAsync("Flight Record Student");
+            await db.SaveAircraftResourceAsync(new AircraftResource { Registration = "SU-LOG", ResourceType = "Aircraft", AircraftType = "C172", Status = "Available", HobbsHours = 100 });
+            var start = DateTime.Today.AddHours(11);
+            int recordId = await db.RecordFlightAsync(new FlightRecord { StudentId = studentId, ActivityType = "Dual", ResourceName = "SU-LOG", InstructorName = "CFI Log", Route = "HECA local area", StartAt = start, EndAt = start.AddHours(1.2), HobbsStart = 100, HobbsEnd = 101.2, Landings = 3 });
+            AssertTrue(recordId > 0, "Flight record was saved");
+            var flightRecords = await db.GetFlightRecordsAsync(DateTime.Today, studentId);
+            AssertEquals(1, flightRecords.Count, "Flight record is returned by day and trainee");
+            AssertEquals(3, flightRecords[0].Landings, "Landing count persists");
+            AssertTrue(Math.Abs(flightRecords[0].DurationHours - 1.2) < 0.001, "Flight duration is calculated");
+            var resource = (await db.GetAircraftResourcesAsync()).Find(r => r.Registration == "SU-LOG");
+            AssertTrue(resource != null && Math.Abs(resource.HobbsHours - 101.2) < 0.001, "Flight record advances aircraft Hobbs hours");
+            var recordAudit = await db.GetAuditEventsAsync("FlightRecord", recordId);
+            AssertTrue(recordAudit.Exists(e => e.Action == "Created"), "Flight record creation is audited");
+            Console.WriteLine("  ✓ Flight records & fleet utilization evidence PASSED!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  ✖ TEST SUITE 17 FAILED: {ex.Message}");
+            failures++;
+        }
+
+        // TEST SUITE 18: Assessment, Stage Check, and Gate Evidence
+        Console.WriteLine("\n[TEST SUITE 18] Testing Assessment & Stage-Check Evidence...");
+        try
+        {
+            await db.ClearAllDataAsync();
+            int studentId = await db.GetOrCreateStudentAsync("Assessment Student");
+            int assessmentId = await db.SaveTrainingAssessmentAsync(new TrainingAssessment { StudentId = studentId, AssessmentType = "StageCheck", Title = "Stage 1 Check", ExaminerName = "Chief CFI", AttemptNumber = 1, Result = "Conditional", Deficiencies = "Crosswind control", RemedialPlan = "Two dual circuits", NextAction = "Recheck" });
+            AssertTrue(assessmentId > 0, "Assessment was saved");
+            var assessments = await db.GetTrainingAssessmentsAsync(studentId);
+            AssertEquals(1, assessments.Count, "Assessment is returned for trainee");
+            AssertEquals("Conditional", assessments[0].Result, "Assessment result persists");
+            AssertEquals("Recheck", assessments[0].NextAction, "Next action persists");
+            var assessmentAudit = await db.GetAuditEventsAsync("TrainingAssessment", assessmentId);
+            AssertTrue(assessmentAudit.Exists(e => e.Action == "Created"), "Assessment creation is audited");
+            Console.WriteLine("  ✓ Assessment & stage-check evidence PASSED!");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"  ✖ TEST SUITE 18 FAILED: {ex.Message}");
+            failures++;
+        }
+
         Console.WriteLine("\n===============================================================================");
         if (failures == 0)
         {

@@ -24,6 +24,13 @@
     <Compile Include="..\EAATrainingManager\Models\TrainingOrder.cs" Link="TrainingOrder.cs" />
     <Compile Include="..\EAATrainingManager\Models\Part141Batch.cs" Link="Part141Batch.cs" />
     <Compile Include="..\EAATrainingManager\Models\ETPBatch.cs" Link="ETPBatch.cs" />
+    <Compile Include="..\EAATrainingManager\Models\TrainingSession.cs" Link="TrainingSession.cs" />
+    <Compile Include="..\EAATrainingManager\Models\AircraftResource.cs" Link="AircraftResource.cs" />
+    <Compile Include="..\EAATrainingManager\Models\AuditEvent.cs" Link="AuditEvent.cs" />
+    <Compile Include="..\EAATrainingManager\Models\ComplianceRecord.cs" Link="ComplianceRecord.cs" />
+    <Compile Include="..\EAATrainingManager\Models\FlightRecord.cs" Link="FlightRecord.cs" />
+    <Compile Include="..\EAATrainingManager\Models\TrainingAssessment.cs" Link="TrainingAssessment.cs" />
+    <Compile Include="..\EAATrainingManager\Models\PersonnelRecord.cs" Link="PersonnelRecord.cs" />
     <Compile Include="..\EAATrainingManager\Models\DashboardMetrics.cs" Link="DashboardMetrics.cs" />
     <Compile Include="..\EAATrainingManager\Services\DatabaseService.cs" Link="DatabaseService.cs" />
     <Compile Include="..\EAATrainingManager\Services\DemographicsEngine.cs" Link="DemographicsEngine.cs" />

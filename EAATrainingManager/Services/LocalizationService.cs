@@ -61,5 +61,10 @@ public class LocalizationService
     public string NavEvaluation => Text("التقييم والمعادلات", "Equivalency & Evaluations");
     public string NavStudents => Text("سجل الطلبة والمتدربين", "Trainee Directory");
     public string NavOrders => Text("كافة أوامر التدريب", "Training Orders Log");
+    public string NavSchedule => Text("الجدول والتشغيل اليومي", "Daily Operations Schedule");
+    public string NavResources => Text("الأسطول والمحاكيات", "Fleet & Simulators");
+    public string NavCompliance => Text("الالتزام والصلاحيات", "Compliance & Validity");
+    public string NavFlightRecords => Text("سجل الطيران والدروس", "Flight & Lesson Records");
+    public string NavAssessments => Text("التقييمات وبوابات التقدم", "Assessments & Gates");
     public string NavExcelSync => Text("استيراد وتصدير الذكي", "Smart Excel Sync");
 }

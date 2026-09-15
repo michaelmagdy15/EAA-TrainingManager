@@ -2,6 +2,20 @@
 
 Status: Ready for execution
 
+## Implementation status (current workspace)
+
+| Work item | Status | Evidence |
+|---|---|---|
+| EAA-001 — build/test baseline | In progress | .NET SDK installed; Release build and 16-suite verification harness run locally. |
+| EAA-004 — audit events | Partial | Append-only audit-event table and operations event logging are implemented for session creation/status updates and fleet-resource saves. User identity and audit UI remain. |
+| EAA-021 / EAA-022 — Part 141 and ETP separation | Partial | Separate models, tables, batch/route overview pages, rosters, nationality aggregation, and order materialization are implemented. |
+| EAA-030 — conflict-aware scheduling | Partial | Persistent daily sessions, student/instructor/resource collision checks, status flow, and day board are implemented. Recurrence, buffers, week/resource calendars, and next-lesson suggestions remain. |
+| EAA-031 — aircraft and simulator resources | Partial | Fleet/simulator registry, availability, Hobbs/Tach meters, maintenance thresholds, and scheduling blocks are implemented. Dispatch meter capture and utilization reporting remain. |
+| EAA-050 — medical/document expiry control | Partial | Medical, ELP, licence, and passport validity records are available in a bilingual compliance queue. Verified expired records block new scheduling; document file storage, alerts, and override authority remain. |
+| Arabic/English requirement | In progress | New operations pages and dynamic session/resource labels use the language service; a full audit of dialogs and remaining legacy XAML is still required. |
+
+Delivery rule: future work must be selected from the P0 backlog below and update this table with tests and acceptance evidence. We are prioritizing R1 trust/audit/compliance foundations alongside the already-started R2 operations work.
+
 This document turns the Talon ETA benchmark into an implementation backlog for the Egyptian Aviation Academy Training Manager. It is intentionally written as a product plan, not as a promise to copy Talon’s product or interface.
 
 ## 1. Product target
@@ -309,6 +323,8 @@ Acceptance criteria:
 Tasks:
 
 - Record lesson type, route, aircraft/simulator, instructor, student, times, landings, approaches, fuel, defects, remarks, and sign-offs.
+
+Current implementation: partial — operational activity records, duration and landing evidence, aircraft Hobbs updates, and audit events are in place. Sign-offs, approaches/fuel/defects, and curriculum linkage remain.
 - Link record to syllabus lesson/objectives and training order where relevant.
 - Support dual, solo, PIC, simulator, and ground-school activity types.
 - Add instructor and student acknowledgement workflow.

@@ -215,6 +215,30 @@
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
 
+                <NavigationViewItem x:Name="NavItemSchedule" Tag="Schedule" Content="جدول التشغيل اليومي">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE787;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemResources" Tag="Resources" Content="الأسطول والمحاكيات">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE806;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem x:Name="NavItemCompliance" Tag="Compliance" Content="الالتزام والصلاحيات">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE72E;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavItemFlightRecords" Tag="FlightRecords" Content="سجل الطيران والدروس">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE709;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem x:Name="NavItemAssessments" Tag="Assessments" Content="التقييمات وبوابات التقدم"><NavigationViewItem.Icon><FontIcon Glyph="&#xE73E;" FlowDirection="LeftToRight"/></NavigationViewItem.Icon></NavigationViewItem>
+
                 <NavigationViewItem x:Name="NavItemExcelSync" Tag="ExcelSync" Content="استيراد وتحديث الإكسيل">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8B5;" FlowDirection="LeftToRight" />

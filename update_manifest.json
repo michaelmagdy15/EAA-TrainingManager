@@ -1,10 +1,10 @@
 ﻿{
-    "version":  "2.2.6",
+    "version":  "2.2.7",
     "releaseDate":  "2026-09-15",
-    "releaseNotes":  "تحديث v2.2.6 - تيسير استيراد ملفات الإكسيل بالكامل بالسحب والإفلات والتصفح البصري، وإضافة زر تصغير النافذة لشريط المهام، مع حزمة تحديث خفيفة مدمجة (Delta Patch).",
-    "releaseNotesEn":  "Update v2.2.6 - Foolproof visual Excel file selection \u0026 drag-and-drop, title bar minimize button, and lightweight in-app delta updater.",
-    "deltaPatchUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.6/EAA_Delta_Patch_v2.2.6.zip",
-    "patchSizeBytes":  729808,
-    "fullPackageUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.6/EAATrainingManager.exe",
-    "fullSizeBytes":  98644781
+    "releaseNotes":  "تحديث v2.2.7 - تيسير استيراد ملفات الإكسيل بالكامل بالسحب والإفلات والتصفح البصري، وإضافة زر تصغير النافذة لشريط المهام، مع حزمة تحديث خفيفة مدمجة (Delta Patch).",
+    "releaseNotesEn":  "Update v2.2.7 - Foolproof visual Excel file selection \u0026 drag-and-drop, title bar minimize button, and lightweight in-app delta updater.",
+    "deltaPatchUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.7/EAA_Delta_Patch_v2.2.7.zip",
+    "patchSizeBytes":  772365,
+    "fullPackageUrl":  "https://github.com/michaelmagdy15/EAA-TrainingManager/releases/download/v2.2.7/EAATrainingManager.exe",
+    "fullSizeBytes":  98692851
 }

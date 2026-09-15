@@ -7,7 +7,7 @@
   "targets": {
     ".NETCoreApp,Version=v9.0": {},
     ".NETCoreApp,Version=v9.0/win-x64": {
-      "EAATrainingManager/2.2.6": {
+      "EAATrainingManager/2.2.7": {
         "dependencies": {
           "ClosedXML": "0.105.1",
           "CommunityToolkit.Mvvm": "8.4.2",
@@ -1137,7 +1137,7 @@
     }
   },
   "libraries": {
-    "EAATrainingManager/2.2.6": {
+    "EAATrainingManager/2.2.7": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

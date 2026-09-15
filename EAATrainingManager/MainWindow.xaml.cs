@@ -126,6 +126,11 @@ public sealed partial class MainWindow : Window
                 "Dashboard" => typeof(DashboardPage),
                 "Students" => typeof(StudentsPage),
                 "Orders" => typeof(OrdersPage),
+                "Schedule" => typeof(SchedulePage),
+                "Resources" => typeof(ResourcesPage),
+                "Compliance" => typeof(CompliancePage),
+                "FlightRecords" => typeof(FlightRecordsPage),
+                "Assessments" => typeof(AssessmentsPage),
                 "Part61" => typeof(OrdersPage),
                 "Part141" => typeof(Part141BatchesPage),
                 "ATP" => typeof(ETPBatchesPage),
@@ -293,6 +298,11 @@ public sealed partial class MainWindow : Window
         if (NavItemEvaluation != null) NavItemEvaluation.Content = LocalizationService.Instance.NavEvaluation;
         if (NavItemStudents != null) NavItemStudents.Content = LocalizationService.Instance.NavStudents;
         if (NavItemOrders != null) NavItemOrders.Content = LocalizationService.Instance.NavOrders;
+        if (NavItemSchedule != null) NavItemSchedule.Content = LocalizationService.Instance.NavSchedule;
+        if (NavItemResources != null) NavItemResources.Content = LocalizationService.Instance.NavResources;
+        if (NavItemCompliance != null) NavItemCompliance.Content = LocalizationService.Instance.NavCompliance;
+        if (NavItemFlightRecords != null) NavItemFlightRecords.Content = LocalizationService.Instance.NavFlightRecords;
+        if (NavItemAssessments != null) NavItemAssessments.Content = LocalizationService.Instance.NavAssessments;
         if (NavItemExcelSync != null) NavItemExcelSync.Content = LocalizationService.Instance.NavExcelSync;
 
         // 6. Reload current page with updated FlowDirection and language
