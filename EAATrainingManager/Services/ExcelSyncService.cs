@@ -74,10 +74,10 @@ public class ExcelSyncService
                 category = "141 ( ا نظام )";
                 defaultProgram = "نظام معتمد 141";
             }
-            else if (sheetName.Contains("خط جوي") || sheetName.Contains("ATP") || sheetName.Contains("atp"))
+            else if (sheetName.Contains("خط جوي") || sheetName.Contains("ATP") || sheetName.Contains("atp") || sheetName.Contains("ETP") || sheetName.Contains("etp"))
             {
-                category = "خط جوي (هــ)";
-                defaultProgram = "طيار خط جوي (ATP)";
+                category = "خط جوي (ETP)";
+                defaultProgram = "طيار خط جوي (ETP)";
             }
             else if (sheetName.Contains("طراز") || sheetName.Contains("فرق") || sheetName.Contains("ساعات"))
             {
@@ -199,6 +199,18 @@ public class ExcelSyncService
                 int acadYear = enrollDate.HasValue && enrollDate.Value.Year >= 2020 ? enrollDate.Value.Year : currentYear;
                 string regTrack = DatabaseService.ClassifyRegulatoryTrack(category, program);
 
+                string batchId = string.Empty;
+                if (regTrack == "Part141")
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match($"{program} {notes} {sheetName}", @"(?:دفعة|الدفعة|batch|دفعه)\s*[:#\-]?\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (m.Success) batchId = m.Groups[1].Value;
+                }
+                else if (regTrack == "ETP")
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match($"{program} {notes} {sheetName}", @"(?:رحلة|خط|etp|دفعة)\s*[:#\-]?\s*([A-Za-z0-9\-]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (m.Success) batchId = m.Groups[1].Value;
+                }
+
                 var order = new TrainingOrder
                 {
                     StudentId = studentId,
@@ -211,6 +223,7 @@ public class ExcelSyncService
                     Year = currentYear,
                     AcademicYear = acadYear,
                     RegulatoryTrack = regTrack,
+                    BatchId = batchId,
                     SequenceNumber = seqNum > 0 ? seqNum : sheetOrdersCount + 1
                 };
 

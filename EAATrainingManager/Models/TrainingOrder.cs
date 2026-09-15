@@ -19,7 +19,10 @@ public class TrainingOrder
     public string Notes { get; set; } = string.Empty;
     public int Year { get; set; } = 0;
     public int AcademicYear { get; set; } = 0;
-    public string RegulatoryTrack { get; set; } = string.Empty; // 'Part61', 'Part141', 'Evaluation', 'TypeRating'
+    public string RegulatoryTrack { get; set; } = string.Empty; // 'Part61', 'Part141', 'ETP', 'Evaluation', 'TypeRating'
+    public string BatchId { get; set; } = string.Empty;
+    public double SyllabusHours { get; set; } = 0.0;
+    public string TrainingOrderAttachments { get; set; } = string.Empty;
     public int SequenceNumber { get; set; }
     public bool IsArchived { get; set; }
     public DateTime? ArchivedAt { get; set; }
@@ -28,6 +31,8 @@ public class TrainingOrder
     {
         "Part61" => "حر (61)",
         "Part141" => "معتمد (141)",
+        "ETP" => "خط جوي (ETP)",
+        "ATP" => "خط جوي (ETP)",
         "Evaluation" => "تقييم (د)",
         "TypeRating" => "طراز",
         _ => RegulatoryTrack
@@ -37,7 +42,10 @@ public class TrainingOrder
     {
         "Part61" => "#0D6EFD",     // Blue
         "Part141" => "#6F42C1",    // Purple
+        "ETP" => "#0DCAF0",        // Cyan / Teal
+        "ATP" => "#0DCAF0",        // Cyan / Teal
         "Evaluation" => "#198754", // Green
+        "TypeRating" => "#FD7E14", // Amber/Orange
         _ => "#6C757D"
     };
 

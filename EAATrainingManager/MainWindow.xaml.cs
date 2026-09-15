@@ -127,8 +127,8 @@ public sealed partial class MainWindow : Window
                 "Students" => typeof(StudentsPage),
                 "Orders" => typeof(OrdersPage),
                 "Part61" => typeof(OrdersPage),
-                "Part141" => typeof(OrdersPage),
-                "ATP" => typeof(OrdersPage),
+                "Part141" => typeof(Part141BatchesPage),
+                "ATP" => typeof(ETPBatchesPage),
                 "TypeRating" => typeof(TypeRatingPage),
                 "Evaluation" => typeof(OrdersPage),
                 "ExcelSync" => typeof(ExcelSyncPage),
@@ -138,8 +138,8 @@ public sealed partial class MainWindow : Window
             object? parameter = tag switch
             {
                 "Part61" => "Part61",
-                "Part141" => "Part141",
-                "ATP" => "ATP",
+                "Part141" => null,
+                "ATP" => null,
                 "Evaluation" => "Evaluation",
                 _ => null
             };

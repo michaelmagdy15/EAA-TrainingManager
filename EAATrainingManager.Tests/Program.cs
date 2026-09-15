@@ -160,7 +160,7 @@ class Program
 
         // TEST SUITE 4: Real Excel Ingestion (2اوامر التدريب.xlsx)
         Console.WriteLine("\n[TEST SUITE 4] Ingesting real Excel file: 2اوامر التدريب.xlsx...");
-        string excelPath = @"C:\Users\Mi5a\EAA System\2اوامر التدريب.xlsx";
+        string excelPath = FindWorkbookFixture();
         var excelSync = new ExcelSyncService(db);
         try
         {
@@ -624,6 +624,22 @@ class Program
         Console.WriteLine("===============================================================================");
 
         return failures;
+    }
+
+    private static string FindWorkbookFixture()
+    {
+        // Tests run from bin/Debug, while the workbook fixture lives at the repository root.
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        for (int depth = 0; directory != null && depth < 8; depth++, directory = directory.Parent)
+        {
+            foreach (var file in directory.GetFiles("*.xlsx"))
+            {
+                if (file.Length > 50_000 && !file.Name.StartsWith("Test_", StringComparison.OrdinalIgnoreCase))
+                    return file.FullName;
+            }
+        }
+
+        throw new FileNotFoundException("Excel fixture workbook was not found above the test output directory.");
     }
 
     static void AssertEquals<T>(T expected, T actual, string description)

@@ -143,6 +143,7 @@ public sealed partial class AddOrderDialog : ContentDialog
         PanelEvaluation.Visibility = streamTag == "Evaluation" ? Visibility.Visible : Visibility.Collapsed;
         PanelTypeRating.Visibility = streamTag == "TypeRating" ? Visibility.Visible : Visibility.Collapsed;
         PanelPart141.Visibility = streamTag == "Part141" ? Visibility.Visible : Visibility.Collapsed;
+        if (PanelETP != null) PanelETP.Visibility = streamTag == "ETP" ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private async void ContentDialog_PrimaryButtonClick(ContentDialog sender, ContentDialogButtonClickEventArgs args)
@@ -181,6 +182,10 @@ public sealed partial class AddOrderDialog : ContentDialog
             string programType = "نظام حر";
             string streamNotes = "";
 
+            string batchId = "";
+            double syllabusHours = 0;
+            string attachments = "";
+
             if (streamTag == "Part61")
             {
                 programType = (ComboPart61Course.SelectedItem as ComboBoxItem)?.Content?.ToString() ?? "PPL";
@@ -202,6 +207,20 @@ public sealed partial class AddOrderDialog : ContentDialog
                 string batchProg = TxtBatchProgramName.Text.Trim();
                 string batchNum = TxtBatchNumber.Text.Trim();
                 programType = string.IsNullOrWhiteSpace(batchNum) ? batchProg : $"{batchProg} - دفعة {batchNum}";
+                batchId = batchNum;
+                syllabusHours = NumBatchSyllabusHours.Value;
+                attachments = TxtOrderAttachments.Text.Trim();
+            }
+            else if (streamTag == "ETP")
+            {
+                string route = TxtETPRoute.Text.Trim();
+                string air = TxtETPAirline.Text.Trim();
+                double hours = NumETPFlightHours.Value;
+                programType = $"خط جوي ({route})";
+                streamNotes = $"مشغل: {air} | ساعات خط: {hours} س";
+                // Keep each operational route independent instead of placing every ETP trainee in one synthetic batch.
+                batchId = string.IsNullOrWhiteSpace(route) ? "ETP" : route;
+                syllabusHours = hours;
             }
 
             DateTime enrollDate = PickerEnrollmentDate.Date.HasValue 
@@ -231,7 +250,10 @@ public sealed partial class AddOrderDialog : ContentDialog
                 enrollDate,
                 completeDate,
                 combinedNotes,
-                year);
+                year,
+                batchId,
+                syllabusHours,
+                attachments);
 
             // 2. Auto-Mirror to Excel in background
             _excelMirrorService?.QueueMirrorSync();

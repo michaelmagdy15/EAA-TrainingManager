@@ -58,6 +58,8 @@ public class Student
     public bool HasCPLIR { get; set; }
     public bool HasATP { get; set; }
     public bool HasEvaluation { get; set; }
+    public bool HasPart141 { get; set; }
+    public bool HasETP { get; set; }
 
     public string MilestonesSummary
     {
@@ -65,6 +67,8 @@ public class Student
         {
             bool isEn = LocalizationService.Instance.IsEnglish;
             var list = new List<string>();
+            if (HasPart141) list.Add(isEn ? "Part 141" : "معتمد 141");
+            if (HasETP) list.Add(isEn ? "ETP" : "خط جوي");
             if (HasPPL) list.Add("PPL");
             if (HasCPLIR) list.Add("CPL/IR");
             if (HasATP) list.Add("ATP");

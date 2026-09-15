@@ -13,7 +13,8 @@ public record TraineeMetricSummary(
     int Part61Count,
     int Part141Count,
     int EvaluationCount,
-    Dictionary<string, int> TopNationalities
+    Dictionary<string, int> TopNationalities,
+    int EtpCount = 0
 );
 
 public class NationalityDistributionItem
@@ -101,6 +102,7 @@ public class DemographicsEngine
         int part61 = filteredOrders.Count(o => o.RegulatoryTrack.Equals("Part61", StringComparison.OrdinalIgnoreCase));
         int part141 = filteredOrders.Count(o => o.RegulatoryTrack.Equals("Part141", StringComparison.OrdinalIgnoreCase));
         int eval = filteredOrders.Count(o => o.RegulatoryTrack.Equals("Evaluation", StringComparison.OrdinalIgnoreCase));
+        int etp = filteredOrders.Count(o => o.RegulatoryTrack.Equals("ETP", StringComparison.OrdinalIgnoreCase) || o.RegulatoryTrack.Equals("ATP", StringComparison.OrdinalIgnoreCase));
 
         var topNationalities = scopedStudents
             .Where(s => s.IsInternational)
@@ -116,7 +118,8 @@ public class DemographicsEngine
             Part61Count: part61,
             Part141Count: part141,
             EvaluationCount: eval,
-            TopNationalities: topNationalities
+            TopNationalities: topNationalities,
+            EtpCount: etp
         );
     }
 }

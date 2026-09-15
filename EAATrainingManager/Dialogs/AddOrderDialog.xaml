@@ -89,9 +89,10 @@
                                   SelectionChanged="ComboTrainingStream_SelectionChanged"
                                   HorizontalAlignment="Stretch">
                             <ComboBoxItem Content="النظام الحر - 61 (Part 61)" Tag="Part61" />
+                            <ComboBoxItem Content="الدفعات المعتمدة - 141 (Part 141)" Tag="Part141" />
+                            <ComboBoxItem Content="الخط جوي - ETP (Route Flying)" Tag="ETP" />
                             <ComboBoxItem Content="التقييم والمعادلات (Evaluation)" Tag="Evaluation" />
                             <ComboBoxItem Content="تجديد طراز وبناء ساعات (Type Rating &amp; Hours)" Tag="TypeRating" />
-                            <ComboBoxItem Content="الدفعات المعتمدة - 141 (Part 141)" Tag="Part141" />
                         </ComboBox>
                     </StackPanel>
 
@@ -175,6 +176,48 @@
                                 <TextBox x:Name="TxtBatchNumber" PlaceholderText="مثال: 72" />
                             </StackPanel>
                         </Grid>
+
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="2*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="ساعات المنهج المقررة:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <NumberBox x:Name="NumBatchSyllabusHours" Value="190" Minimum="1" Maximum="1000" SpinButtonPlacementMode="Inline" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="إلحاقات ومرفقات الأمر التدريبي:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="TxtOrderAttachments" PlaceholderText="مرفقات القرار أو إلحاقات الأمر التدريبي" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- DYNAMIC SUB-PANEL 5: الخط جوي ETP -->
+                    <StackPanel x:Name="PanelETP" Spacing="10" Visibility="Collapsed">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="2*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Spacing="4">
+                                <TextBlock Text="المسار الجوي / قطاع الخط:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="TxtETPRoute" Text="القاهرة - أسوان (HECA-HESN)" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Spacing="4">
+                                <TextBlock Text="شركة الطيران المشغلة:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <TextBox x:Name="TxtETPAirline" Text="مصر للطيران" />
+                            </StackPanel>
+                        </Grid>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="ساعات الطيران المقررة بالخط الجوي:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <NumberBox x:Name="NumETPFlightHours" Value="50" Minimum="1" Maximum="500" SpinButtonPlacementMode="Inline" />
+                        </StackPanel>
                     </StackPanel>
 
                     <!-- COMMON ORDER FIELDS: رقم الأمر والتواريخ -->

@@ -56,9 +56,10 @@
             <ScrollViewer HorizontalScrollBarVisibility="Auto" 
                           VerticalScrollBarVisibility="Disabled" 
                           HorizontalScrollMode="Enabled">
-                <Grid ColumnSpacing="12" MinWidth="760">
+                <Grid ColumnSpacing="12" MinWidth="900">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
@@ -99,9 +100,24 @@
                         <ComboBoxItem Content="TYPE_RATING" />
                     </ComboBox>
 
+                    <!-- Regulatory Track Filter -->
+                    <ComboBox x:Name="TrackFilterCombo" 
+                              Grid.Column="3" 
+                              CornerRadius="8" 
+                              SelectionChanged="FilterChanged" 
+                              MinWidth="150" 
+                              VerticalAlignment="Center">
+                        <ComboBoxItem x:Name="ComboItemTrackAll" Content="كافة المسارات" IsSelected="True" />
+                        <ComboBoxItem Content="Part61" />
+                        <ComboBoxItem Content="Part141" />
+                        <ComboBoxItem Content="ETP" />
+                        <ComboBoxItem Content="Evaluation" />
+                        <ComboBoxItem Content="TypeRating" />
+                    </ComboBox>
+
                     <!-- Year Filter -->
                     <ComboBox x:Name="YearFilterCombo" 
-                              Grid.Column="3" 
+                              Grid.Column="4" 
                               CornerRadius="8" 
                               SelectionChanged="FilterChanged" 
                               MinWidth="110" 
@@ -112,7 +128,7 @@
                     </ComboBox>
 
                     <!-- Badge Count -->
-                    <Border Grid.Column="4" Style="{StaticResource StatusPillBorder}" Background="{ThemeResource LayerFillColorDefaultBrush}" VerticalAlignment="Center">
+                    <Border Grid.Column="5" Style="{StaticResource StatusPillBorder}" Background="{ThemeResource LayerFillColorDefaultBrush}" VerticalAlignment="Center">
                         <TextBlock x:Name="TxtOrdersCount" Text="0 أمر" FontWeight="Bold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" />
                     </Border>
                 </Grid>
@@ -139,6 +155,7 @@
                                 <ColumnDefinition Width="90" />
                                 <ColumnDefinition Width="2.2*" />
                                 <ColumnDefinition Width="80" />
+                                <ColumnDefinition Width="100" />
                                 <ColumnDefinition Width="1.5*" />
                                 <ColumnDefinition Width="105" />
                                 <ColumnDefinition Width="105" />
@@ -151,12 +168,13 @@
                             <TextBlock x:Name="ColOrderNum" Grid.Column="1" Text="رقم الأمر" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
                             <TextBlock x:Name="ColStudentName" Grid.Column="2" Text="اسم المتدرب / الطالب" FontWeight="Bold" VerticalAlignment="Center" />
                             <TextBlock x:Name="ColNationality" Grid.Column="3" Text="الجنسية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ColProgram" Grid.Column="4" Text="البرنامج / المنهج" FontWeight="Bold" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ColEnrollDate" Grid.Column="5" Text="الالتحاق" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ColEndDate" Grid.Column="6" Text="النهاية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ColStatus" Grid.Column="7" Text="الحالة" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ColAction" Grid.Column="8" Text="الإجراءات" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ColNotes" Grid.Column="9" Text="ملاحظات" FontWeight="Bold" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColTrack" Grid.Column="4" Text="المسار" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColProgram" Grid.Column="5" Text="البرنامج / المنهج" FontWeight="Bold" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColEnrollDate" Grid.Column="6" Text="الالتحاق" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColEndDate" Grid.Column="7" Text="النهاية" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColStatus" Grid.Column="8" Text="الحالة" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColAction" Grid.Column="9" Text="الإجراءات" FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center" />
+                            <TextBlock x:Name="ColNotes" Grid.Column="10" Text="ملاحظات" FontWeight="Bold" VerticalAlignment="Center" />
                         </Grid>
                     </Border>
 
@@ -179,6 +197,7 @@
                                             <ColumnDefinition Width="90" />
                                             <ColumnDefinition Width="2.2*" />
                                             <ColumnDefinition Width="80" />
+                                            <ColumnDefinition Width="100" />
                                             <ColumnDefinition Width="1.5*" />
                                             <ColumnDefinition Width="105" />
                                             <ColumnDefinition Width="105" />
@@ -191,17 +210,23 @@
                                         <TextBlock Grid.Column="1" Text="{x:Bind OrderNumber}" TextAlignment="Center" FontWeight="Bold" VerticalAlignment="Center" Foreground="#0D6EFD" />
                                         <TextBlock Grid.Column="2" Text="{x:Bind StudentDisplayName}" FontWeight="SemiBold" VerticalAlignment="Center" Padding="0,2,0,4" />
                                         <TextBlock Grid.Column="3" Text="{x:Bind Nationality}" TextAlignment="Center" VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="4" Text="{x:Bind BiDiProgramType}" VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="5" Text="{x:Bind FormattedEnrollmentDate}" TextAlignment="Center" VerticalAlignment="Center" />
-                                        <TextBlock Grid.Column="6" Text="{x:Bind FormattedCompletionDate}" TextAlignment="Center" VerticalAlignment="Center" />
+
+                                        <!-- Regulatory Track Badge -->
+                                        <Border Grid.Column="4" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{x:Bind RegulatoryTrackBadgeColor}">
+                                            <TextBlock Text="{x:Bind RegulatoryTrackBadgeText}" FontSize="10" FontWeight="Bold" Foreground="White" />
+                                        </Border>
+
+                                        <TextBlock Grid.Column="5" Text="{x:Bind BiDiProgramType}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="6" Text="{x:Bind FormattedEnrollmentDate}" TextAlignment="Center" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="7" Text="{x:Bind FormattedCompletionDate}" TextAlignment="Center" VerticalAlignment="Center" />
                                         
                                         <!-- Status Pill -->
-                                        <Border Grid.Column="7" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{x:Bind StatusBadgeColor}">
+                                        <Border Grid.Column="8" HorizontalAlignment="Center" VerticalAlignment="Center" Style="{StaticResource StatusPillBorder}" Background="{x:Bind StatusBadgeColor}">
                                             <TextBlock Text="{x:Bind Status}" FontSize="11" FontWeight="Bold" Foreground="White" />
                                         </Border>
 
                                         <!-- Multi-Action Bar -->
-                                        <StackPanel Grid.Column="8" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                        <StackPanel Grid.Column="9" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Center" VerticalAlignment="Center">
                                             <Button Tag="{x:Bind}" 
                                                     Click="BtnCompleteOrder_Click" 
                                                     Padding="7,5" 
@@ -227,7 +252,7 @@
                                         </StackPanel>
 
                                         <!-- Notes -->
-                                        <TextBlock Grid.Column="9" Text="{x:Bind BiDiNotes}" VerticalAlignment="Center" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                                        <TextBlock Grid.Column="10" Text="{x:Bind BiDiNotes}" VerticalAlignment="Center" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
                                     </Grid>
                                 </Border>
                             </DataTemplate>

@@ -40,9 +40,7 @@ if ($isGhLoggedIn) {
     [Environment]::SetEnvironmentVariable('GH_TOKEN', $null, 'Process')
     [Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $null, 'Process')
 } else {
-    $Token = "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"
-    [Environment]::SetEnvironmentVariable('GH_TOKEN', $Token, 'Process')
-    [Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $Token, 'Process')
+    throw "GitHub CLI is not authenticated. Run 'gh auth login' before creating a release. No token is read from source code."
 }
 
 # 1. Determine Target Version

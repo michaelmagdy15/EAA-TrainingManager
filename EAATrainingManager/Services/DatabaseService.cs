@@ -74,6 +74,39 @@ public class DatabaseService
             CREATE INDEX IF NOT EXISTS idx_orders_track ON TrainingOrders(RegulatoryTrack);
             CREATE INDEX IF NOT EXISTS idx_orders_status ON TrainingOrders(Status);
             CREATE INDEX IF NOT EXISTS idx_orders_milestone ON TrainingOrders(Milestone);
+
+            CREATE TABLE IF NOT EXISTS Part141Batches (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                BatchId TEXT NOT NULL UNIQUE,
+                ProgramName TEXT NOT NULL,
+                StartDate TEXT,
+                EndDate TEXT,
+                SyllabusHours REAL NOT NULL DEFAULT 190.0,
+                TrainingOrderAttachments TEXT,
+                Notes TEXT,
+                AcademicYear INTEGER NOT NULL DEFAULT 2026,
+                IsArchived INTEGER NOT NULL DEFAULT 0,
+                ArchivedAt TEXT,
+                CreatedAt TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ETPBatches (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                BatchId TEXT NOT NULL UNIQUE,
+                RouteName TEXT NOT NULL,
+                AirlineCompany TEXT,
+                StartDate TEXT,
+                EndDate TEXT,
+                FlightHours REAL NOT NULL DEFAULT 50.0,
+                Notes TEXT,
+                AcademicYear INTEGER NOT NULL DEFAULT 2026,
+                IsArchived INTEGER NOT NULL DEFAULT 0,
+                ArchivedAt TEXT,
+                CreatedAt TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_part141_batch_id ON Part141Batches(BatchId);
+            CREATE INDEX IF NOT EXISTS idx_etp_batch_id ON ETPBatches(BatchId);
         ";
         await cmd.ExecuteNonQueryAsync();
 
@@ -124,6 +157,24 @@ public class DatabaseService
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN RegulatoryTrack TEXT NOT NULL DEFAULT 'Part61';";
                 await alterCmd.ExecuteNonQueryAsync();
             }
+            if (!orderCols.Contains("BatchId"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN BatchId TEXT;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!orderCols.Contains("SyllabusHours"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN SyllabusHours REAL NOT NULL DEFAULT 0;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!orderCols.Contains("TrainingOrderAttachments"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN TrainingOrderAttachments TEXT;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
             if (!orderCols.Contains("IsArchived"))
             {
                 using var alterCmd = connection.CreateCommand();
@@ -136,6 +187,16 @@ public class DatabaseService
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN ArchivedAt TEXT;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
+
+            // Decouple legacy airline/ETP data that was misclassified as Part141
+            using var decoupleCmd = connection.CreateCommand();
+            decoupleCmd.CommandText = @"
+                UPDATE TrainingOrders 
+                SET RegulatoryTrack = 'ETP' 
+                WHERE RegulatoryTrack = 'Part141' 
+                  AND (ProgramType LIKE '%خط جوي%' OR ProgramType LIKE '%ATP%' OR RegulationCategory LIKE '%خط جوي%' OR Notes LIKE '%خط جوي%');
+            ";
+            await decoupleCmd.ExecuteNonQueryAsync();
         }
         catch
         {
@@ -273,6 +334,9 @@ public class DatabaseService
                     Status = @status,
                     AcademicYear = @acadYr,
                     RegulatoryTrack = @regTrack,
+                    BatchId = @batchId,
+                    SyllabusHours = @hours,
+                    TrainingOrderAttachments = @attach,
                     SequenceNumber = @seq
                 WHERE Id = @id;
             ";
@@ -282,9 +346,9 @@ public class DatabaseService
         {
             cmd.CommandText = @"
                 INSERT INTO TrainingOrders 
-                (StudentId, OrderNumber, ProgramType, Milestone, RegulationCategory, EnrollmentDate, CompletionDate, Notes, Status, Year, AcademicYear, RegulatoryTrack, SequenceNumber)
+                (StudentId, OrderNumber, ProgramType, Milestone, RegulationCategory, EnrollmentDate, CompletionDate, Notes, Status, Year, AcademicYear, RegulatoryTrack, BatchId, SyllabusHours, TrainingOrderAttachments, SequenceNumber)
                 VALUES 
-                (@sid, @ordNum, @prog, @milestone, @cat, @enroll, @complete, @notes, @status, @yr, @acadYr, @regTrack, @seq);
+                (@sid, @ordNum, @prog, @milestone, @cat, @enroll, @complete, @notes, @status, @yr, @acadYr, @regTrack, @batchId, @hours, @attach, @seq);
                 SELECT last_insert_rowid();
             ";
             cmd.Parameters.AddWithValue("@sid", order.StudentId);
@@ -301,6 +365,9 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@status", order.Status);
         cmd.Parameters.AddWithValue("@acadYr", order.AcademicYear);
         cmd.Parameters.AddWithValue("@regTrack", order.RegulatoryTrack);
+        cmd.Parameters.AddWithValue("@batchId", (object?)order.BatchId ?? string.Empty);
+        cmd.Parameters.AddWithValue("@hours", order.SyllabusHours);
+        cmd.Parameters.AddWithValue("@attach", (object?)order.TrainingOrderAttachments ?? string.Empty);
         cmd.Parameters.AddWithValue("@seq", order.SequenceNumber);
 
         if (existingId > 0)
@@ -316,16 +383,17 @@ public class DatabaseService
     }
 
     /// <summary>
-    /// Standardizes the regulatory track (Part 61, Part 141, Evaluation, TypeRating)
+    /// Standardizes the regulatory track (Part 61, Part 141, ETP, Evaluation, TypeRating)
+    /// Decouples Part 141 approved batches from ETP / Route Flying.
     /// </summary>
     public static string ClassifyRegulatoryTrack(string category, string programType)
     {
         string combined = $"{category} {programType}".ToLowerInvariant();
+        if (combined.Contains("خط جوي") || combined.Contains("etp") || combined.Contains("atp") || combined.Contains("route")) return "ETP";
+        if (combined.Contains("141") || combined.Contains("معتمد") || combined.Contains("دفعة") || combined.Contains("دفعات") || combined.Contains("فرقة")) return "Part141";
         if (combined.Contains("61") || combined.Contains("حر")) return "Part61";
-        if (combined.Contains("141") || combined.Contains("معتمد") || combined.Contains("دفعة") || combined.Contains("دفعات")) return "Part141";
         if (combined.Contains("تقييم") || combined.Contains("معادلة")) return "Evaluation";
         if (combined.Contains("طراز") || combined.Contains("فرق") || combined.Contains("بناء ساعات")) return "TypeRating";
-        if (combined.Contains("خط جوي") || combined.Contains("atp")) return "Part141";
         return "Part61";
     }
 
@@ -352,7 +420,9 @@ public class DatabaseService
                     SUM(CASE WHEN o.Milestone = 'PPL' THEN 1 ELSE 0 END) AS HasPPL,
                     SUM(CASE WHEN o.Milestone = 'CPL_IR' THEN 1 ELSE 0 END) AS HasCPLIR,
                     SUM(CASE WHEN o.Milestone = 'ATP' THEN 1 ELSE 0 END) AS HasATP,
-                    SUM(CASE WHEN o.Milestone = 'EVALUATION' THEN 1 ELSE 0 END) AS HasEval
+                    SUM(CASE WHEN o.Milestone = 'EVALUATION' THEN 1 ELSE 0 END) AS HasEval,
+                    SUM(CASE WHEN o.RegulatoryTrack = 'Part141' THEN 1 ELSE 0 END) AS HasPart141,
+                    SUM(CASE WHEN o.RegulatoryTrack = 'ETP' OR o.RegulatoryTrack = 'ATP' THEN 1 ELSE 0 END) AS HasETP
                 FROM Students s
                 INNER JOIN TrainingOrders o ON s.Id = o.StudentId
                 WHERE (s.IsArchived = 0 OR s.IsArchived IS NULL) 
@@ -374,7 +444,9 @@ public class DatabaseService
                     SUM(CASE WHEN o.Milestone = 'PPL' THEN 1 ELSE 0 END) AS HasPPL,
                     SUM(CASE WHEN o.Milestone = 'CPL_IR' THEN 1 ELSE 0 END) AS HasCPLIR,
                     SUM(CASE WHEN o.Milestone = 'ATP' THEN 1 ELSE 0 END) AS HasATP,
-                    SUM(CASE WHEN o.Milestone = 'EVALUATION' THEN 1 ELSE 0 END) AS HasEval
+                    SUM(CASE WHEN o.Milestone = 'EVALUATION' THEN 1 ELSE 0 END) AS HasEval,
+                    SUM(CASE WHEN o.RegulatoryTrack = 'Part141' THEN 1 ELSE 0 END) AS HasPart141,
+                    SUM(CASE WHEN o.RegulatoryTrack = 'ETP' OR o.RegulatoryTrack = 'ATP' THEN 1 ELSE 0 END) AS HasETP
                 FROM Students s
                 LEFT JOIN TrainingOrders o ON s.Id = o.StudentId AND (o.IsArchived = 0 OR o.IsArchived IS NULL)
                 WHERE (s.IsArchived = 0 OR s.IsArchived IS NULL)
@@ -405,7 +477,9 @@ public class DatabaseService
                 HasPPL = reader.GetInt32(11) > 0,
                 HasCPLIR = reader.GetInt32(12) > 0,
                 HasATP = reader.GetInt32(13) > 0,
-                HasEvaluation = reader.GetInt32(14) > 0
+                HasEvaluation = reader.GetInt32(14) > 0,
+                HasPart141 = reader.GetInt32(15) > 0,
+                HasETP = reader.GetInt32(16) > 0
             };
 
             // Filter international only if requested
@@ -543,7 +617,8 @@ public class DatabaseService
             SELECT 
                 o.Id, o.StudentId, s.DisplayName, s.Nationality, o.OrderNumber, o.ProgramType, o.Milestone, 
                 o.RegulationCategory, o.EnrollmentDate, o.CompletionDate, o.Notes, o.Status, o.Year,
-                o.AcademicYear, o.RegulatoryTrack, o.SequenceNumber
+                o.AcademicYear, o.RegulatoryTrack, o.SequenceNumber,
+                o.BatchId, o.SyllabusHours, o.TrainingOrderAttachments
             FROM TrainingOrders o
             INNER JOIN Students s ON o.StudentId = s.Id
             WHERE (o.IsArchived = 0 OR o.IsArchived IS NULL) AND (s.IsArchived = 0 OR s.IsArchived IS NULL)
@@ -569,7 +644,10 @@ public class DatabaseService
                 Year = reader.GetInt32(12),
                 AcademicYear = reader.IsDBNull(13) ? reader.GetInt32(12) : reader.GetInt32(13),
                 RegulatoryTrack = reader.IsDBNull(14) ? "Part61" : reader.GetString(14),
-                SequenceNumber = reader.GetInt32(15)
+                SequenceNumber = reader.GetInt32(15),
+                BatchId = reader.IsDBNull(16) ? string.Empty : reader.GetString(16),
+                SyllabusHours = reader.IsDBNull(17) ? 0.0 : reader.GetDouble(17),
+                TrainingOrderAttachments = reader.IsDBNull(18) ? string.Empty : reader.GetString(18)
             };
 
             // Year filter
@@ -579,8 +657,16 @@ public class DatabaseService
             // Regulatory Track filter
             if (!string.IsNullOrEmpty(regulatoryTrackFilter) && regulatoryTrackFilter != "الجميع")
             {
-                if (!order.RegulatoryTrack.Equals(regulatoryTrackFilter, StringComparison.OrdinalIgnoreCase))
-                    continue;
+                if (regulatoryTrackFilter.Equals("ETP", StringComparison.OrdinalIgnoreCase) || regulatoryTrackFilter.Equals("ATP", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!order.RegulatoryTrack.Equals("ETP", StringComparison.OrdinalIgnoreCase) && !order.RegulatoryTrack.Equals("ATP", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
+                else
+                {
+                    if (!order.RegulatoryTrack.Equals(regulatoryTrackFilter, StringComparison.OrdinalIgnoreCase))
+                        continue;
+                }
             }
 
             // International only filter
@@ -1008,7 +1094,10 @@ public class DatabaseService
         DateTime enrollmentDate,
         DateTime? completionDate,
         string notes,
-        int year = 0)
+        int year = 0,
+        string batchId = "",
+        double syllabusHours = 0.0,
+        string attachments = "")
     {
         int studentId = await GetOrCreateStudentAsync(studentName, nationality);
         int calcYear = year > 0 ? year : (enrollmentDate.Year > 0 ? enrollmentDate.Year : DateTime.Now.Year);
@@ -1017,6 +1106,8 @@ public class DatabaseService
         {
             "Part61" => "61 (ج نظام حر)",
             "Part141" => "141 (ا نظام)",
+            "ETP" => "خط جوي (ETP)",
+            "ATP" => "خط جوي (ETP)",
             "Evaluation" => "تقييم (د)",
             "TypeRating" => "طراز وبناء ساعات",
             _ => "61 (ج نظام حر)"
@@ -1037,11 +1128,66 @@ public class DatabaseService
             Year = calcYear,
             AcademicYear = calcYear,
             RegulatoryTrack = regulatoryTrack,
+            BatchId = batchId,
+            SyllabusHours = syllabusHours,
+            TrainingOrderAttachments = attachments,
             SequenceNumber = 0
         };
 
         int orderId = await InsertOrUpdateOrderAsync(order);
         order.Id = orderId;
+
+        // Materialize the dedicated module record as part of order creation.
+        if (string.Equals(regulatoryTrack, "Part141", StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(batchId))
+        {
+            string programName = programType;
+            int separator = programName.IndexOf(" - ", StringComparison.OrdinalIgnoreCase);
+            if (separator > 0) programName = programName[..separator].Trim();
+
+            await CreateOrUpdatePart141BatchAsync(new Part141Batch
+            {
+                BatchId = batchId.Trim(),
+                ProgramName = string.IsNullOrWhiteSpace(programName) ? "Part 141" : programName,
+                StartDate = enrollmentDate,
+                EndDate = completionDate,
+                SyllabusHours = syllabusHours > 0 ? syllabusHours : 190,
+                TrainingOrderAttachments = attachments,
+                AcademicYear = calcYear,
+                Notes = notes
+            });
+        }
+        else if ((string.Equals(regulatoryTrack, "ETP", StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(regulatoryTrack, "ATP", StringComparison.OrdinalIgnoreCase)) &&
+                 !string.IsNullOrWhiteSpace(batchId))
+        {
+            string routeName = programType;
+            int open = routeName.IndexOf('(');
+            int close = routeName.LastIndexOf(')');
+            if (open >= 0 && close > open) routeName = routeName[(open + 1)..close].Trim();
+
+            string airline = string.Empty;
+            int operatorIndex = notes.IndexOf("Ù…Ø´ØºÙ„:", StringComparison.OrdinalIgnoreCase);
+            if (operatorIndex >= 0)
+            {
+                string value = notes[(operatorIndex + 8)..];
+                int pipe = value.IndexOf('|');
+                airline = (pipe >= 0 ? value[..pipe] : value).Trim();
+            }
+
+            await CreateOrUpdateETPBatchAsync(new ETPBatch
+            {
+                BatchId = batchId.Trim(),
+                RouteName = string.IsNullOrWhiteSpace(routeName) ? batchId.Trim() : routeName,
+                AirlineCompany = airline,
+                StartDate = enrollmentDate,
+                EndDate = completionDate,
+                FlightHours = syllabusHours > 0 ? syllabusHours : 50,
+                AcademicYear = calcYear,
+                Notes = notes
+            });
+        }
+
         return order;
     }
 
@@ -1150,5 +1296,367 @@ public class DatabaseService
         string val = reader.GetString(ordinal);
         if (DateTime.TryParse(val, out var dt)) return dt;
         return null;
+    }
+
+    /// <summary>
+    /// Retrieves Part 141 approved batches with student counts, progress aggregations,
+    /// nationality breakdown (local vs foreign), and student roster drilldown.
+    /// Also infers batches from historical Part 141 orders if not yet explicitly in Part141Batches table.
+    /// </summary>
+    public async Task<List<Part141Batch>> GetPart141BatchesAsync(int? academicYear = null, string? searchQuery = null)
+    {
+        var batches = new List<Part141Batch>();
+
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        // 1. Fetch persisted batches from Part141Batches
+        using (var cmd = connection.CreateCommand())
+        {
+            string sql = "SELECT Id, BatchId, ProgramName, StartDate, EndDate, SyllabusHours, TrainingOrderAttachments, Notes, AcademicYear, IsArchived, CreatedAt FROM Part141Batches WHERE (IsArchived = 0 OR IsArchived IS NULL)";
+            if (academicYear.HasValue && academicYear.Value > 0)
+            {
+                sql += " AND AcademicYear = @yr";
+                cmd.Parameters.AddWithValue("@yr", academicYear.Value);
+            }
+            sql += " ORDER BY BatchId DESC, Id DESC;";
+            cmd.CommandText = sql;
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                batches.Add(new Part141Batch
+                {
+                    Id = reader.GetInt32(0),
+                    BatchId = reader.GetString(1),
+                    ProgramName = reader.GetString(2),
+                    StartDate = ParseNullableDate(reader, 3),
+                    EndDate = ParseNullableDate(reader, 4),
+                    SyllabusHours = reader.IsDBNull(5) ? 190.0 : reader.GetDouble(5),
+                    TrainingOrderAttachments = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
+                    Notes = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    AcademicYear = reader.IsDBNull(8) ? 2026 : reader.GetInt32(8),
+                    IsArchived = (reader.IsDBNull(9) ? 0 : reader.GetInt32(9)) == 1,
+                    CreatedAt = DateTime.TryParse(reader.GetString(10), out var dt) ? dt : DateTime.Now
+                });
+            }
+        }
+
+        // 2. Fetch all Part 141 orders to aggregate student counts, nationality breakdown, and student rosters
+        // STRICT DECOUPLING: Only pull orders where RegulatoryTrack = 'Part141' (no ETP/airline data!)
+        var p141Orders = await GetAllOrdersAsync(yearFilter: academicYear, regulatoryTrackFilter: "Part141");
+        
+        // Group orders by BatchId (or inferred from ProgramType/Notes)
+        var ordersByBatch = new Dictionary<string, List<TrainingOrder>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var order in p141Orders)
+        {
+            string batchKey = !string.IsNullOrWhiteSpace(order.BatchId) ? order.BatchId.Trim() : ExtractBatchId(order.ProgramType, order.Notes);
+            if (string.IsNullOrWhiteSpace(batchKey)) batchKey = "عام";
+
+            if (!ordersByBatch.TryGetValue(batchKey, out var list))
+            {
+                list = new List<TrainingOrder>();
+                ordersByBatch[batchKey] = list;
+            }
+            list.Add(order);
+        }
+
+        // 3. For any batches that were inferred from orders but not yet in Part141Batches table, add them
+        foreach (var kvp in ordersByBatch)
+        {
+            if (!batches.Any(b => b.BatchId.Equals(kvp.Key, StringComparison.OrdinalIgnoreCase)))
+            {
+                var sampleOrder = kvp.Value.FirstOrDefault();
+                batches.Add(new Part141Batch
+                {
+                    Id = 0,
+                    BatchId = kvp.Key,
+                    ProgramName = sampleOrder?.ProgramType ?? $"دفعة {kvp.Key}",
+                    StartDate = kvp.Value.Where(o => o.EnrollmentDate.HasValue).Min(o => o.EnrollmentDate),
+                    EndDate = kvp.Value.Where(o => o.CompletionDate.HasValue).Max(o => o.CompletionDate),
+                    SyllabusHours = 190.0,
+                    AcademicYear = sampleOrder?.AcademicYear ?? (academicYear ?? 2026),
+                    Notes = "تم التجميع تلقائياً من أوامر التدريب المعتمدة"
+                });
+            }
+        }
+
+        // 4. Fetch all students to build rosters
+        var allStudents = await GetAllStudentsAsync(academicYear: academicYear);
+        var studentDict = allStudents.ToDictionary(s => s.Id);
+
+        foreach (var batch in batches)
+        {
+            if (ordersByBatch.TryGetValue(batch.BatchId, out var bOrders))
+            {
+                var uniqueStudentIds = bOrders.Select(o => o.StudentId).Distinct().ToList();
+                var roster = uniqueStudentIds.Where(id => studentDict.ContainsKey(id)).Select(id => studentDict[id]).ToList();
+
+                batch.TotalStudents = roster.Count;
+                batch.GraduatedStudents = bOrders.Where(o => !o.IsActive).Select(o => o.StudentId).Distinct().Count();
+                batch.LocalStudentsCount = roster.Count(s => !s.IsInternational);
+                batch.InternationalStudentsCount = roster.Count(s => s.IsInternational);
+
+                // Group by nationality
+                batch.NationalityBreakdown = roster
+                    .GroupBy(s => DemographicsEngine.StandardizeNationality(s.Nationality))
+                    .Select(g => new NationalityCountItem
+                    {
+                        Country = g.Key,
+                        Count = g.Count()
+                    })
+                    .OrderByDescending(n => n.Count)
+                    .ToList();
+
+                batch.StudentRoster = roster;
+            }
+        }
+
+        // Search filtering if specified
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            batches = batches.Where(b => 
+                ArabicTextHelper.IsFuzzyMatch(b.BatchId, searchQuery) ||
+                ArabicTextHelper.IsFuzzyMatch(b.ProgramName, searchQuery) ||
+                ArabicTextHelper.IsFuzzyMatch(b.Notes, searchQuery) ||
+                b.StudentRoster.Any(s => ArabicTextHelper.IsFuzzyMatch(s.DisplayName, searchQuery))
+            ).ToList();
+        }
+
+        return batches.OrderByDescending(b => b.BatchId).ToList();
+    }
+
+    private static string ExtractBatchId(string programType, string notes)
+    {
+        string combined = $"{programType} {notes}";
+        var match = System.Text.RegularExpressions.Regex.Match(combined, @"(?:دفعة|الدفعة|batch|دفعه)\s*[:#\-]?\s*(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (match.Success) return match.Groups[1].Value;
+        return string.Empty;
+    }
+
+    public async Task<int> CreateOrUpdatePart141BatchAsync(Part141Batch batch)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        using var cmd = connection.CreateCommand();
+        if (batch.Id > 0)
+        {
+            cmd.CommandText = @"
+                UPDATE Part141Batches SET
+                    BatchId = @bId,
+                    ProgramName = @prog,
+                    StartDate = @start,
+                    EndDate = @end,
+                    SyllabusHours = @hours,
+                    TrainingOrderAttachments = @attach,
+                    Notes = @notes,
+                    AcademicYear = @acadYr
+                WHERE Id = @id;
+            ";
+            cmd.Parameters.AddWithValue("@id", batch.Id);
+        }
+        else
+        {
+            cmd.CommandText = @"
+                INSERT INTO Part141Batches
+                (BatchId, ProgramName, StartDate, EndDate, SyllabusHours, TrainingOrderAttachments, Notes, AcademicYear, IsArchived, CreatedAt)
+                VALUES
+                (@bId, @prog, @start, @end, @hours, @attach, @notes, @acadYr, 0, @created)
+                ON CONFLICT(BatchId) DO UPDATE SET
+                    ProgramName = excluded.ProgramName,
+                    StartDate = excluded.StartDate,
+                    EndDate = excluded.EndDate,
+                    SyllabusHours = excluded.SyllabusHours,
+                    TrainingOrderAttachments = excluded.TrainingOrderAttachments,
+                    Notes = excluded.Notes,
+                    AcademicYear = excluded.AcademicYear;
+                SELECT last_insert_rowid();
+            ";
+            cmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
+        }
+
+        cmd.Parameters.AddWithValue("@bId", batch.BatchId);
+        cmd.Parameters.AddWithValue("@prog", batch.ProgramName);
+        cmd.Parameters.AddWithValue("@start", batch.StartDate.HasValue ? batch.StartDate.Value.ToString("yyyy-MM-dd") : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@end", batch.EndDate.HasValue ? batch.EndDate.Value.ToString("yyyy-MM-dd") : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@hours", batch.SyllabusHours);
+        cmd.Parameters.AddWithValue("@attach", (object?)batch.TrainingOrderAttachments ?? string.Empty);
+        cmd.Parameters.AddWithValue("@notes", (object?)batch.Notes ?? string.Empty);
+        cmd.Parameters.AddWithValue("@acadYr", batch.AcademicYear);
+
+        if (batch.Id > 0)
+        {
+            await cmd.ExecuteNonQueryAsync();
+            return batch.Id;
+        }
+        else
+        {
+            var res = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(res);
+        }
+    }
+
+    public async Task<bool> DeletePart141BatchAsync(int batchId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "UPDATE Part141Batches SET IsArchived = 1, ArchivedAt = @now WHERE Id = @id;";
+        cmd.Parameters.AddWithValue("@now", DateTime.Now.ToString("o"));
+        cmd.Parameters.AddWithValue("@id", batchId);
+        return await cmd.ExecuteNonQueryAsync() > 0;
+    }
+
+    /// <summary>
+    /// Retrieves ETP / Route Flying batches and operational line training records,
+    /// completely decoupled from Part 141.
+    /// </summary>
+    public async Task<List<ETPBatch>> GetETPBatchesAsync(int? academicYear = null, string? searchQuery = null)
+    {
+        var batches = new List<ETPBatch>();
+
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        // 1. Persisted ETPBatches
+        using (var cmd = connection.CreateCommand())
+        {
+            string sql = "SELECT Id, BatchId, RouteName, AirlineCompany, StartDate, EndDate, FlightHours, Notes, AcademicYear, IsArchived, CreatedAt FROM ETPBatches WHERE (IsArchived = 0 OR IsArchived IS NULL)";
+            if (academicYear.HasValue && academicYear.Value > 0)
+            {
+                sql += " AND AcademicYear = @yr";
+                cmd.Parameters.AddWithValue("@yr", academicYear.Value);
+            }
+            sql += " ORDER BY Id DESC;";
+            cmd.CommandText = sql;
+
+            using var reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                batches.Add(new ETPBatch
+                {
+                    Id = reader.GetInt32(0),
+                    BatchId = reader.GetString(1),
+                    RouteName = reader.GetString(2),
+                    AirlineCompany = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    StartDate = ParseNullableDate(reader, 4),
+                    EndDate = ParseNullableDate(reader, 5),
+                    FlightHours = reader.IsDBNull(6) ? 50.0 : reader.GetDouble(6),
+                    Notes = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    AcademicYear = reader.IsDBNull(8) ? 2026 : reader.GetInt32(8),
+                    IsArchived = (reader.IsDBNull(9) ? 0 : reader.GetInt32(9)) == 1,
+                    CreatedAt = DateTime.TryParse(reader.GetString(10), out var dt) ? dt : DateTime.Now
+                });
+            }
+        }
+
+        // 2. Fetch all ETP/ATP orders (strictly decoupled from Part 141)
+        var etpOrders = await GetAllOrdersAsync(yearFilter: academicYear, regulatoryTrackFilter: "ETP");
+
+        // If no explicit batches exist yet, infer default route batch from orders
+        if (batches.Count == 0 && etpOrders.Count > 0)
+        {
+            var defaultBatch = new ETPBatch
+            {
+                Id = 0,
+                BatchId = "ETP-01",
+                RouteName = "تدريب خطوط جوية تجارية (ETP / Route Line Training)",
+                AirlineCompany = "مصر للطيران / شركات الخط الجوي",
+                StartDate = etpOrders.Where(o => o.EnrollmentDate.HasValue).Min(o => o.EnrollmentDate),
+                EndDate = etpOrders.Where(o => o.CompletionDate.HasValue).Max(o => o.CompletionDate),
+                FlightHours = 50.0,
+                AcademicYear = academicYear ?? 2026,
+                Orders = etpOrders,
+                TotalPilots = etpOrders.Select(o => o.StudentId).Distinct().Count(),
+                CompletedPilots = etpOrders.Count(o => !o.IsActive)
+            };
+            batches.Add(defaultBatch);
+        }
+        else
+        {
+            foreach (var b in batches)
+            {
+                var routeOrders = etpOrders
+                    .Where(o => string.Equals(o.BatchId, b.BatchId, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                b.Orders = routeOrders;
+                b.TotalPilots = routeOrders.Select(o => o.StudentId).Distinct().Count();
+                b.CompletedPilots = routeOrders.Where(o => !o.IsActive).Select(o => o.StudentId).Distinct().Count();
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchQuery))
+        {
+            batches = batches.Where(b =>
+                ArabicTextHelper.IsFuzzyMatch(b.BatchId, searchQuery) ||
+                ArabicTextHelper.IsFuzzyMatch(b.RouteName, searchQuery) ||
+                ArabicTextHelper.IsFuzzyMatch(b.AirlineCompany, searchQuery)).ToList();
+        }
+
+        return batches;
+    }
+
+    public async Task<int> CreateOrUpdateETPBatchAsync(ETPBatch batch)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+
+        using var cmd = connection.CreateCommand();
+        if (batch.Id > 0)
+        {
+            cmd.CommandText = @"
+                UPDATE ETPBatches SET
+                    BatchId = @bId,
+                    RouteName = @route,
+                    AirlineCompany = @air,
+                    StartDate = @start,
+                    EndDate = @end,
+                    FlightHours = @hours,
+                    Notes = @notes,
+                    AcademicYear = @acadYr
+                WHERE Id = @id;
+            ";
+            cmd.Parameters.AddWithValue("@id", batch.Id);
+        }
+        else
+        {
+            cmd.CommandText = @"
+                INSERT INTO ETPBatches
+                (BatchId, RouteName, AirlineCompany, StartDate, EndDate, FlightHours, Notes, AcademicYear, IsArchived, CreatedAt)
+                VALUES
+                (@bId, @route, @air, @start, @end, @hours, @notes, @acadYr, 0, @created)
+                ON CONFLICT(BatchId) DO UPDATE SET
+                    RouteName = excluded.RouteName,
+                    AirlineCompany = excluded.AirlineCompany,
+                    StartDate = excluded.StartDate,
+                    EndDate = excluded.EndDate,
+                    FlightHours = excluded.FlightHours,
+                    Notes = excluded.Notes,
+                    AcademicYear = excluded.AcademicYear;
+                SELECT last_insert_rowid();
+            ";
+            cmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
+        }
+
+        cmd.Parameters.AddWithValue("@bId", batch.BatchId);
+        cmd.Parameters.AddWithValue("@route", batch.RouteName);
+        cmd.Parameters.AddWithValue("@air", (object?)batch.AirlineCompany ?? string.Empty);
+        cmd.Parameters.AddWithValue("@start", batch.StartDate.HasValue ? batch.StartDate.Value.ToString("yyyy-MM-dd") : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@end", batch.EndDate.HasValue ? batch.EndDate.Value.ToString("yyyy-MM-dd") : (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@hours", batch.FlightHours);
+        cmd.Parameters.AddWithValue("@notes", (object?)batch.Notes ?? string.Empty);
+        cmd.Parameters.AddWithValue("@acadYr", batch.AcademicYear);
+
+        if (batch.Id > 0)
+        {
+            await cmd.ExecuteNonQueryAsync();
+            return batch.Id;
+        }
+        else
+        {
+            var res = await cmd.ExecuteScalarAsync();
+            return Convert.ToInt32(res);
+        }
     }
 }

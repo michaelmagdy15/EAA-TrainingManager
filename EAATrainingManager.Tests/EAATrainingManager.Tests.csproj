@@ -22,6 +22,8 @@
     <Compile Include="..\EAATrainingManager\Helpers\ArabicTextHelper.cs" Link="ArabicTextHelper.cs" />
     <Compile Include="..\EAATrainingManager\Models\Student.cs" Link="Student.cs" />
     <Compile Include="..\EAATrainingManager\Models\TrainingOrder.cs" Link="TrainingOrder.cs" />
+    <Compile Include="..\EAATrainingManager\Models\Part141Batch.cs" Link="Part141Batch.cs" />
+    <Compile Include="..\EAATrainingManager\Models\ETPBatch.cs" Link="ETPBatch.cs" />
     <Compile Include="..\EAATrainingManager\Models\DashboardMetrics.cs" Link="DashboardMetrics.cs" />
     <Compile Include="..\EAATrainingManager\Services\DatabaseService.cs" Link="DatabaseService.cs" />
     <Compile Include="..\EAATrainingManager\Services\DemographicsEngine.cs" Link="DemographicsEngine.cs" />
