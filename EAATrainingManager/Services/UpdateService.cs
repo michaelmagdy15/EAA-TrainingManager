@@ -14,7 +14,7 @@ public class UpdateCheckResult
     public bool IsUpToDate { get; set; }
     public bool IsOffline { get; set; }
     public string CurrentVersion { get; set; } = "2.2.1";
-    public string LatestVersion { get; set; } = "2.2.7";
+    public string LatestVersion { get; set; } = "2.2.8";
     public double PatchSizeMb { get; set; } = 0.0;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
@@ -23,7 +23,7 @@ public class UpdateCheckResult
 
 public class UpdateService
 {
-    private const string CurrentAppVersion = "2.2.7";
+    private const string CurrentAppVersion = "2.2.8";
     private const string RepoOwner = "michaelmagdy15";
     private const string RepoName = "EAA-TrainingManager";
     
@@ -205,15 +205,34 @@ public class UpdateService
                     // 2. Fallback to standalone .exe if not modular or delta zip not found
                     if (string.IsNullOrWhiteSpace(chosenAssetApiUrl))
                     {
+                        // Prioritize exact match for EAATrainingManager.exe to avoid accidentally downloading Setup.exe
                         foreach (var asset in assets.EnumerateArray())
                         {
                             string name = asset.GetProperty("name").GetString() ?? "";
-                            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                            if (string.Equals(name, "EAATrainingManager.exe", StringComparison.OrdinalIgnoreCase))
                             {
                                 chosenAssetApiUrl = asset.GetProperty("url").GetString()!;
                                 expectedSize = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
                                 isDeltaZip = false;
                                 break;
+                            }
+                        }
+
+                        // Secondary fallback: any other executable that isn't a setup or patcher
+                        if (string.IsNullOrWhiteSpace(chosenAssetApiUrl))
+                        {
+                            foreach (var asset in assets.EnumerateArray())
+                            {
+                                string name = asset.GetProperty("name").GetString() ?? "";
+                                if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
+                                    !name.Contains("Setup", StringComparison.OrdinalIgnoreCase) &&
+                                    !name.Contains("Patch", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    chosenAssetApiUrl = asset.GetProperty("url").GetString()!;
+                                    expectedSize = asset.TryGetProperty("size", out var sz) ? sz.GetInt64() : 0;
+                                    isDeltaZip = false;
+                                    break;
+                                }
                             }
                         }
                     }

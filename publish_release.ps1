@@ -133,11 +133,35 @@ if (Test-Path $updateServicePath) {
 }
 Write-Host "  -> Project files updated to version $Version." -ForegroundColor Green
 
+# 2c. Locate 7-Zip for High-Ratio LZMA2 & SFX Compression
+$7zExe = $null
+$7zSfx = $null
+$candidate7z = @(
+    "C:\Program Files\7-Zip\7z.exe",
+    "C:\Program Files (x86)\7-Zip\7z.exe",
+    (Get-Command 7z.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source)
+)
+foreach ($c in $candidate7z) {
+    if ($c -and (Test-Path $c)) {
+        $7zExe = $c
+        $sfxCandidate = Join-Path (Split-Path -Parent $c) "7z.sfx"
+        if (Test-Path $sfxCandidate) { $7zSfx = $sfxCandidate }
+        break
+    }
+}
+if ($7zExe) {
+    Write-Host "  -> 7-Zip Ultra Compression Engine located: $7zExe" -ForegroundColor Green
+} else {
+    Write-Warning "7-Zip not located. Will use standard PowerShell compression fallback."
+}
+
 # 3. Compile Executables (Modular Runtime & Standalone Single-File)
 $PublishDir = Join-Path $ScriptRoot "Publish"
 $StandaloneDir = Join-Path $ScriptRoot "bin\standalone"
 $ExePath = Join-Path $StandaloneDir "EAATrainingManager.exe"
 $deltaZipPath = Join-Path $ScriptRoot "EAA_Delta_Patch_$Tag.zip"
+$setupExePath = Join-Path $ScriptRoot "EAA_Training_Manager_Setup.exe"
+$smartPatcherExe = Join-Path $ScriptRoot "EAA_Smart_Patch_$Tag.exe"
 
 if (-not $SkipBuild) {
     Write-Host "`n[2/6] Building Modular Runtime in $PublishDir..." -ForegroundColor Cyan
@@ -176,9 +200,38 @@ $exeItem = Get-Item $ExePath
 $fileSizeBytes = $exeItem.Length
 $sha256 = (Get-FileHash -Path $ExePath -Algorithm SHA256).Hash.ToLower()
 
-Write-Host "  Delta Patch: $deltaZipPath ($deltaSizeMb MB / $deltaSizeBytes bytes)" -ForegroundColor Green
-Write-Host "  Standalone:  $ExePath ($([math]::Round($fileSizeBytes / 1MB, 2)) MB)" -ForegroundColor Gray
-Write-Host "  SHA256:      $sha256" -ForegroundColor Gray
+# 4b. Compile Standalone Smart Patcher Executable if csc is available
+$cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+$smartPatcherScript = Join-Path $ScriptRoot "smart_patcher.cs"
+if ((Test-Path $cscPath) -and (Test-Path $smartPatcherScript)) {
+    try {
+        if (Test-Path $smartPatcherExe) { Remove-Item $smartPatcherExe -Force }
+        & $cscPath /nologo /target:exe /out:"$smartPatcherExe" /reference:System.IO.Compression.dll /reference:System.IO.Compression.FileSystem.dll /resource:"$deltaZipPath",Patch.zip "$smartPatcherScript" 2>$null
+        if (Test-Path $smartPatcherExe) {
+            $smartSizeMb = [math]::Round((Get-Item $smartPatcherExe).Length / 1MB, 2)
+            Write-Host "  Smart Patch EXE: $smartPatcherExe ($smartSizeMb MB)" -ForegroundColor Green
+        }
+    } catch {
+        Write-Warning "Could not compile standalone smart patcher: $_"
+    }
+}
+
+# 4c. Generate Ultra-Compressed Self-Extracting Setup Executable (~47 MB)
+$setupSizeBytes = $fileSizeBytes
+if ($7zExe -and $7zSfx) {
+    Write-Host "`n[*] Generating Ultra-Compressed Self-Extracting Setup Executable (~47 MB)..." -ForegroundColor Cyan
+    if (Test-Path $setupExePath) { Remove-Item $setupExePath -Force }
+    & $7zExe a -sfx"$7zSfx" -mx=9 -ms=on "$setupExePath" "$PublishDir\*" | Out-Null
+    if (Test-Path $setupExePath) {
+        $setupSizeBytes = (Get-Item $setupExePath).Length
+        $setupSizeMb = [math]::Round($setupSizeBytes / 1MB, 2)
+        Write-Host "  Setup Executable: $setupExePath ($setupSizeMb MB)" -ForegroundColor Green
+    }
+}
+
+Write-Host "  Delta Patch:      $deltaZipPath ($deltaSizeMb MB / $deltaSizeBytes bytes)" -ForegroundColor Green
+Write-Host "  Standalone EXE:   $ExePath ($([math]::Round($fileSizeBytes / 1MB, 2)) MB)" -ForegroundColor Gray
+Write-Host "  SHA256:           $sha256" -ForegroundColor Gray
 
 # Copy modular files to workspace root for instant high-speed delta updating
 try {
@@ -191,12 +244,12 @@ try {
     Write-Warning "Could not update root modular files (may be running): $_"
 }
 
-# 5. Update update_manifest.json with True Delta Metrics
+# 5. Update update_manifest.json with True Delta & Setup Metrics
 Write-Host "`n[4/6] Updating update_manifest.json..." -ForegroundColor Cyan
 $todayDate = (Get-Date).ToString("yyyy-MM-dd")
 
-$notesAr = "تحديث v$Version - تيسير استيراد ملفات الإكسيل بالكامل بالسحب والإفلات والتصفح البصري، وإضافة زر تصغير النافذة لشريط المهام، مع حزمة تحديث خفيفة مدمجة (Delta Patch)."
-$notesEn = "Update v$Version - Foolproof visual Excel file selection & drag-and-drop, title bar minimize button, and lightweight in-app delta updater."
+$notesAr = "تحديث v$Version - حزمة مضغوطة فائقة الخفة مع مشغل التثبيت الذاتي السريع، وتيسير استيراد ملفات الإكسيل بالكامل بالسحب والإفلات، مع تحديثات تفاضلية فورية (Delta Patch)."
+$notesEn = "Update v$Version - Ultra-compressed package with self-extracting setup, foolproof visual Excel import, and lightweight 770 KB delta updater."
 
 $manifestObj = [ordered]@{
     version = $Version
@@ -205,6 +258,8 @@ $manifestObj = [ordered]@{
     releaseNotesEn = $notesEn
     deltaPatchUrl = "https://github.com/$GitHubRepo/releases/download/$Tag/EAA_Delta_Patch_$Tag.zip"
     patchSizeBytes = $deltaSizeBytes
+    setupPackageUrl = "https://github.com/$GitHubRepo/releases/download/$Tag/EAA_Training_Manager_Setup.exe"
+    setupSizeBytes = $setupSizeBytes
     fullPackageUrl = "https://github.com/$GitHubRepo/releases/download/$Tag/EAATrainingManager.exe"
     fullSizeBytes = $fileSizeBytes
 }
@@ -215,9 +270,15 @@ Write-Host "  -> Manifest updated for version $Version with true delta size: $de
 # 8. Create / Update Standalone ZIP Archive
 Write-Host "`n[5/6] Creating Full Standalone Zip Archive..." -ForegroundColor Cyan
 $zipPath = Join-Path $ScriptRoot "EAA_Training_Manager_Standalone.zip"
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 try {
-    Compress-Archive -Path "$PublishDir\*" -DestinationPath $zipPath -Force
-    Write-Host "  -> Archive created: $zipPath" -ForegroundColor Green
+    if ($7zExe) {
+        & $7zExe a -tzip -mx=9 "$zipPath" "$PublishDir\*" | Out-Null
+    } else {
+        Compress-Archive -Path "$PublishDir\*" -DestinationPath $zipPath -Force
+    }
+    $zipMb = [math]::Round((Get-Item $zipPath).Length / 1MB, 2)
+    Write-Host "  -> Archive created: $zipPath ($zipMb MB)" -ForegroundColor Green
 } catch {
     Write-Warning "Could not update zip archive: $_"
 }
@@ -230,7 +291,7 @@ git add -A
 $gitStatus = git status --porcelain
 if ($gitStatus) {
     Write-Host "  -> Committing changes..." -ForegroundColor Gray
-    git commit -m "chore(release): bump version to $Tag with lightweight delta patch"
+    git commit -m "chore(release): bump version to $Tag with compressed setup and lightweight delta patch"
     Write-Host "  -> Pushing to origin main..." -ForegroundColor Gray
     git push origin main
 } else {
@@ -242,6 +303,11 @@ Write-Host "  -> Creating GitHub Release $Tag and Uploading Delta Patch & Binari
 $tempNotesFile = [System.IO.Path]::GetTempFileName()
 [System.IO.File]::WriteAllText($tempNotesFile, $Notes, [System.Text.Encoding]::UTF8)
 
+# Prepare asset list for release upload
+$assetsToUpload = @($deltaZipPath, $ExePath, $zipPath)
+if (Test-Path $setupExePath) { $assetsToUpload += $setupExePath }
+if (Test-Path $smartPatcherExe) { $assetsToUpload += $smartPatcherExe }
+
 try {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "SilentlyContinue"
@@ -251,17 +317,17 @@ try {
     $uploadSuccess = $false
     if ($releaseExists) {
         Write-Host "  -> Release $Tag exists. Uploading/overwriting assets..." -ForegroundColor Yellow
-        $out = & gh release upload $Tag $deltaZipPath $ExePath $zipPath --repo $GitHubRepo --clobber 2>&1
+        $out = & gh release upload $Tag @assetsToUpload --repo $GitHubRepo --clobber 2>&1
         $uploadSuccess = ($LASTEXITCODE -eq 0)
     } else {
         Write-Host "  -> Creating fresh release $Tag..." -ForegroundColor Gray
-        $out = & gh release create $Tag $deltaZipPath $ExePath $zipPath --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest 2>&1
+        $out = & gh release create $Tag @assetsToUpload --repo $GitHubRepo --title $Title --notes-file $tempNotesFile --latest 2>&1
         $uploadSuccess = ($LASTEXITCODE -eq 0)
     }
     $ErrorActionPreference = $prevEAP
 
     if ($uploadSuccess) {
-        Write-Host "  -> Release $Tag uploaded with Delta Patch ($deltaSizeMb MB) and marked as Latest!" -ForegroundColor Green
+        Write-Host "  -> Release $Tag uploaded with Delta Patch ($deltaSizeMb MB) and Setup ($([math]::Round($setupSizeBytes / 1MB, 2)) MB) marked as Latest!" -ForegroundColor Green
     } else {
         Write-Host "`n[!] GitHub CLI reported: $out" -ForegroundColor Yellow
         Write-Host "`nTo enable fully automated 0-click uploads, authorize gh CLI once by running:" -ForegroundColor Cyan

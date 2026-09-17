@@ -15,9 +15,9 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <WindowsAppSdkDeploymentManagerInitialize>false</WindowsAppSdkDeploymentManagerInitialize>
     <EnableMsixTooling>true</EnableMsixTooling>
-    <Version>2.2.7</Version>
-    <AssemblyVersion>2.2.7.0</AssemblyVersion>
-    <FileVersion>2.2.7.0</FileVersion>
+    <Version>2.2.8</Version>
+    <AssemblyVersion>2.2.8.0</AssemblyVersion>
+    <FileVersion>2.2.8.0</FileVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <NoWarn>$(NoWarn);MVVMTK0045</NoWarn>
@@ -73,6 +73,47 @@
     <PublishReadyToRun>False</PublishReadyToRun>
     <PublishTrimmed>False</PublishTrimmed>
   </PropertyGroup>
+
+  <Target Name="PruneUnusedBinaries" BeforeTargets="_ComputeFilesToBundle;_CopyResolvedFilesToPublishPreserveNewest;_CopyResolvedFilesToPublishAlways">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="
+        '%(FileName)' == 'onnxruntime' or 
+        '%(FileName)' == 'DirectML' or 
+        '%(FileName)' == 'Microsoft.Windows.AI.MachineLearning' or 
+        '%(FileName)' == 'Microsoft.Windows.AI.MachineLearning.Projection' or 
+        '%(FileName)' == 'Microsoft.ML.OnnxRuntime' or
+        '%(FileName)' == 'Microsoft.Windows.Widgets' or
+        '%(FileName)' == 'Microsoft.Windows.Widgets.Projection' or
+        '%(FileName)' == 'Microsoft.Windows.Search' or
+        '%(FileName)' == 'Microsoft.Windows.Search.Projection' or
+        '%(FileName)' == 'PerceptiveStreaming' or
+        '%(FileName)' == 'Microsoft.DiaSymReader.Native.amd64' or
+        '%(FileName)' == 'mscordbi' or
+        $([System.String]::Copy('%(FileName)').StartsWith('mscordaccore')) or
+        '%(FileName)' == 'Microsoft.VisualBasic.Core'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CleanUnusedPublishFiles" AfterTargets="Publish">
+    <ItemGroup>
+      <_UnusedFilesToDelete Include="
+        $(PublishDir)onnxruntime.dll;
+        $(PublishDir)DirectML.dll;
+        $(PublishDir)Microsoft.Windows.AI.MachineLearning.dll;
+        $(PublishDir)Microsoft.Windows.AI.MachineLearning.Projection.dll;
+        $(PublishDir)Microsoft.ML.OnnxRuntime.dll;
+        $(PublishDir)Microsoft.Windows.Widgets.dll;
+        $(PublishDir)Microsoft.Windows.Widgets.Projection.dll;
+        $(PublishDir)Microsoft.Windows.Search.dll;
+        $(PublishDir)Microsoft.Windows.Search.Projection.dll;
+        $(PublishDir)PerceptiveStreaming.dll;
+        $(PublishDir)Microsoft.DiaSymReader.Native.amd64.dll;
+        $(PublishDir)mscordbi.dll;
+        $(PublishDir)mscordaccore*.dll;
+        $(PublishDir)Microsoft.VisualBasic.Core.dll" />
+    </ItemGroup>
+    <Delete Files="@(_UnusedFilesToDelete)" Condition="Exists('%(FullPath)')" />
+  </Target>
 
   <Target Name="CopyPriToPublish" AfterTargets="Publish">
     <Copy SourceFiles="$(TargetDir)EAATrainingManager.pri" DestinationFiles="$(PublishDir)EAATrainingManager.pri" Condition="Exists('$(TargetDir)EAATrainingManager.pri')" />
