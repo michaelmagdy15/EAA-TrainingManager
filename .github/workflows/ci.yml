@@ -1,0 +1,72 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify-and-package:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 9 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Verify project and updater versions
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content EAATrainingManager/EAATrainingManager.csproj
+          $projectVersion = $project.SelectSingleNode('//Version').InnerText
+          $assemblyVersion = $project.SelectSingleNode('//AssemblyVersion').InnerText
+          $fileVersion = $project.SelectSingleNode('//FileVersion').InnerText
+          $manifestVersion = (Get-Content update_manifest.json -Raw | ConvertFrom-Json).version
+          $updateService = Get-Content EAATrainingManager/Services/UpdateService.cs -Raw
+          $currentVersion = [regex]::Match($updateService, 'CurrentAppVersion\s*=\s*"([^"]+)"').Groups[1].Value
+          $resultDefault = [regex]::Match($updateService, 'CurrentVersion\s*\{\s*get;\s*set;\s*\}\s*=\s*"([^"]+)"').Groups[1].Value
+          $expectedAssemblyVersion = "$projectVersion.0"
+          $versions = @{
+            Project = $projectVersion
+            Assembly = $assemblyVersion
+            File = $fileVersion
+            Manifest = $manifestVersion
+            Updater = $currentVersion
+            UpdaterResult = $resultDefault
+          }
+          $versions.GetEnumerator() | ForEach-Object { Write-Host "$($_.Key): $($_.Value)" }
+          if ($projectVersion -ne $manifestVersion -or
+              $projectVersion -ne $currentVersion -or
+              $projectVersion -ne $resultDefault -or
+              $assemblyVersion -ne $expectedAssemblyVersion -or
+              $fileVersion -ne $expectedAssemblyVersion) {
+            throw 'Project, assembly, updater, and manifest versions do not match.'
+          }
+
+      - name: Run verification suites
+        run: dotnet run --project EAATrainingManager.Tests/EAATrainingManager.Tests.csproj --configuration Release
+
+      - name: Build WinUI application
+        run: dotnet build EAATrainingManager/EAATrainingManager.csproj --configuration Release -p:Platform=x64
+
+      - name: Publish standalone executable
+        run: dotnet publish EAATrainingManager/EAATrainingManager.csproj --configuration Release --runtime win-x64 -p:Platform=x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o artifacts/publish
+
+      - name: Verify standalone package output
+        shell: pwsh
+        run: |
+          $executable = 'artifacts/publish/EAATrainingManager.exe'
+          if (-not (Test-Path -LiteralPath $executable)) {
+            throw "Standalone executable was not produced: $executable"
+          }
+
+      - name: Upload standalone package
+        uses: actions/upload-artifact@v4
+        with:
+          name: EAATrainingManager-win-x64
+          path: artifacts/publish/
+          if-no-files-found: error

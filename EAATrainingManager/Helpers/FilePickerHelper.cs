@@ -40,9 +40,82 @@ public static class FilePickerHelper
     [DllImport("comdlg32.dll", SetLastError = true, CharSet = CharSet.Auto)]
     private static extern bool GetOpenFileName([In, Out] ref OpenFileName ofn);
 
-    private const int OFN_FILEMUSTEXIST = 0x00001000;
-    private const int OFN_PATHMUSTEXIST = 0x00000800;
+    [DllImport("comdlg32.dll", SetLastError = true, CharSet = CharSet.Auto)]
+    private static extern bool GetSaveFileName([In, Out] ref OpenFileName ofn);
+
+    private const int OFN_OVERWRITEPROMPT = 0x00000002;
     private const int OFN_NOCHANGEDIR = 0x00000008;
+    private const int OFN_PATHMUSTEXIST = 0x00000800;
+    private const int OFN_FILEMUSTEXIST = 0x00001000;
+
+    /// <summary>
+    /// Prompts the user to choose a destination path for an .xlsx export.
+    /// </summary>
+    public static async Task<string?> PickSaveExcelPathAsync(string suggestedFileName)
+    {
+        IntPtr hwnd = IntPtr.Zero;
+        try
+        {
+            var targetWindow = MainWindow.Current ?? null;
+            if (targetWindow != null)
+            {
+                hwnd = WinRT.Interop.WindowNative.GetWindowHandle(targetWindow);
+            }
+        }
+        catch { }
+
+        // 1. Try modern Windows App SDK FileSavePicker
+        try
+        {
+            var picker = new FileSavePicker();
+            if (hwnd != IntPtr.Zero)
+            {
+                WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            }
+            picker.SuggestedStartLocation = PickerLocationId.DocumentsLibrary;
+            picker.SuggestedFileName = suggestedFileName;
+            picker.FileTypeChoices.Add("Excel Workbook", [".xlsx"]);
+            var file = await picker.PickSaveFileAsync();
+            if (file != null && !string.IsNullOrWhiteSpace(file.Path))
+            {
+                return file.Path;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FilePickerHelper] Modern save picker failed: {ex.Message}. Falling back to Win32.");
+        }
+
+        // 2. Ultra-reliable Win32 GetSaveFileName fallback
+        try
+        {
+            var ofn = new OpenFileName();
+            ofn.lStructSize = Marshal.SizeOf(ofn);
+            ofn.hwndOwner = hwnd;
+            ofn.lpstrFilter = "ملفات إكسيل (*.xlsx)\0*.xlsx\0جميع الملفات (*.*)\0*.*\0";
+            ofn.lpstrFile = suggestedFileName + new string(' ', 1024);
+            ofn.nMaxFile = ofn.lpstrFile.Length;
+            ofn.lpstrTitle = "حفظ السجل التدريبي الرسمي (Excel) - الأكاديمية المصرية لعلوم الطيران";
+            ofn.Flags = OFN_OVERWRITEPROMPT | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+            ofn.lpstrDefExt = "xlsx";
+            ofn.lpstrInitialDir = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+            if (GetSaveFileName(ref ofn))
+            {
+                string chosen = ofn.lpstrFile.TrimEnd(' ', '\0').Trim();
+                if (!string.IsNullOrWhiteSpace(chosen))
+                {
+                    return chosen.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) ? chosen : chosen + ".xlsx";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FilePickerHelper] Win32 save fallback failed: {ex.Message}");
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Prompts the user to select an Excel workbook (.xlsx / .xls) with dual fallback support.

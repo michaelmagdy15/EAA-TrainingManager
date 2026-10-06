@@ -67,4 +67,5 @@ public class LocalizationService
     public string NavFlightRecords => Text("سجل الطيران والدروس", "Flight & Lesson Records");
     public string NavAssessments => Text("التقييمات وبوابات التقدم", "Assessments & Gates");
     public string NavExcelSync => Text("استيراد وتصدير الذكي", "Smart Excel Sync");
+    public string NavAudit => Text("سجل التدقيق", "Audit History");
 }

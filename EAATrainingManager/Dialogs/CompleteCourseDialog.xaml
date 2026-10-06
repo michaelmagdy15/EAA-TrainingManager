@@ -33,5 +33,11 @@
             <TextBlock Text="ملاحظات اجتياز الاختبار / اعتماد سلطة الطيران:" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <TextBox x:Name="TxtCompletionNotes" PlaceholderText="مثال: اجتاز اختبار الطيران العملي بنجاح، اعتمد من سلطة الطيران المدني" TextWrapping="Wrap" Height="60" />
         </StackPanel>
+
+        <StackPanel Spacing="4">
+            <TextBlock Text="إعادة إدخال كلمة المرور لتوقيع واعتماد هذا الانتقال:" FontSize="12" FontWeight="SemiBold" />
+            <PasswordBox x:Name="ApprovalPassword" PlaceholderText="كلمة المرور الحالية" />
+            <TextBlock x:Name="ApprovalErrorText" Visibility="Collapsed" Foreground="OrangeRed" TextWrapping="Wrap" />
+        </StackPanel>
     </StackPanel>
 </ContentDialog>

@@ -42,6 +42,18 @@ public sealed partial class CompleteCourseDialog : ContentDialog
                 : DateTime.Now;
 
             string notes = TxtCompletionNotes.Text.Trim();
+            if (notes.Length < 8)
+                throw new ArgumentException("Provide a reason of at least eight characters for this approval.");
+            if (App.IdentityService.CurrentSession is not UserSession session)
+                throw new UnauthorizedAccessException("An authenticated approval session is required.");
+
+            await App.IdentityService.RecordApprovalAsync(
+                session.SessionId,
+                "TrainingOrder",
+                _order.Id,
+                "Complete",
+                notes,
+                ApprovalPassword.Password);
 
             // 1. Complete order in SQLite
             bool success = await _databaseService.CompleteOrderAsync(_order.Id, completionDate, notes);
@@ -59,7 +71,11 @@ public sealed partial class CompleteCourseDialog : ContentDialog
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[CompleteCourseDialog] {ex.Message}");
+            AppLogService.LogException("TrainingOrder.CompleteApproval", ex, "TrainingOrder", _order.Id.ToString());
+            ApprovalErrorText.Text = LocalizationService.Instance.Text(
+                "تعذر اعتماد إتمام التدريب. تحقق من الصلاحية وكلمة المرور وسبب الاعتماد.",
+                "Could not approve course completion. Check permission, password, and approval reason.");
+            ApprovalErrorText.Visibility = Microsoft.UI.Xaml.Visibility.Visible;
             args.Cancel = true;
         }
         finally

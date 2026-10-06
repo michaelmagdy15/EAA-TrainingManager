@@ -126,6 +126,20 @@
                             <TextBlock x:Name="TxtTitleMinimize" Text="تصغير" FontWeight="SemiBold" FontSize="12" />
                         </StackPanel>
                     </Button>
+
+                    <Button x:Name="BtnTitleUsers" Click="BtnTitleUsers_Click" Padding="10,5" CornerRadius="14" Background="{ThemeResource LayerFillColorAltBrush}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE77B;" FontSize="12" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleUsers" Text="المستخدمون" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="BtnTitleSignOut" Click="BtnTitleSignOut_Click" Padding="10,5" CornerRadius="14" Background="{ThemeResource LayerFillColorAltBrush}">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                            <FontIcon Glyph="&#xE8AC;" FontSize="12" FlowDirection="LeftToRight" />
+                            <TextBlock x:Name="TxtTitleSignOut" Text="تسجيل الخروج" FontWeight="SemiBold" FontSize="12" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>
@@ -163,7 +177,7 @@
 
             <!-- Navigation Menu Items -->
             <NavigationView.MenuItems>
-                <NavigationViewItem x:Name="NavItemDashboard" Tag="Dashboard" Content="الرئيسية والمؤشرات" IsSelected="True">
+                <NavigationViewItem x:Name="NavItemDashboard" Tag="Dashboard" Content="الرئيسية والمؤشرات">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE80F;" FlowDirection="LeftToRight" />
                     </NavigationViewItem.Icon>
@@ -238,12 +252,20 @@
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem x:Name="NavItemAssessments" Tag="Assessments" Content="التقييمات وبوابات التقدم"><NavigationViewItem.Icon><FontIcon Glyph="&#xE73E;" FlowDirection="LeftToRight"/></NavigationViewItem.Icon></NavigationViewItem>
+                <NavigationViewItem x:Name="NavItemCurriculum" Tag="Curriculum" Content="المناهج والخطط الدراسية"><NavigationViewItem.Icon><FontIcon Glyph="&#xE7B8;" FlowDirection="LeftToRight"/></NavigationViewItem.Icon></NavigationViewItem>
+                <NavigationViewItem x:Name="NavItemProgress" Tag="Progress" Content="بوابة تقدم المتدرب"><NavigationViewItem.Icon><FontIcon Glyph="&#xE9D9;" FlowDirection="LeftToRight"/></NavigationViewItem.Icon></NavigationViewItem>
 
                 <NavigationViewItem x:Name="NavItemExcelSync" Tag="ExcelSync" Content="استيراد وتحديث الإكسيل">
                     <NavigationViewItem.Icon>
                         <FontIcon Glyph="&#xE8B5;" FlowDirection="LeftToRight" />
                     </NavigationViewItem.Icon>
                 </NavigationViewItem>
+                <NavigationViewItem x:Name="NavItemAudit" Tag="Audit" Content="سجل التدقيق">
+                    <NavigationViewItem.Icon>
+                        <FontIcon Glyph="&#xE81C;" FlowDirection="LeftToRight" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
             </NavigationView.MenuItems>
 
             <!-- Footer: Language Switcher & 100% Offline System Indicator -->

@@ -1,7 +1,7 @@
 # دليل المنظومة الشامل والتوثيق المرجعي | Egyptian Aviation Academy (EAA) Training Management System (EAA-TMS)
 ### Master Technical Specification, Operational Handbook & Product Strategy
 **وثيقة المرجع الشامل لمنظومة إدارة وتتبع عمليات التدريب الجوي – الأكاديمية المصرية لعلوم الطيران (وزارة الطيران المدني)**  
-*Version: v2.2.4 (Enterprise Production Release)*
+*Current project version: v2.2.8*
 
 ---
 
@@ -13,7 +13,7 @@
    - [4. Architectural Strength: Why EAA Must Use This System](#4-architectural-strength-why-eaa-must-use-this-system)
    - [5. Strategic Product Roadmap (Phases 1 – 4)](#5-strategic-product-roadmap-phases-1--4)
    - [6. Operations Mini-Tutorials (Step-by-Step Practical Guides)](#6-operations-mini-tutorials-step-by-step-practical-guides)
-   - [7. Automated Verification Harness (15 Test Suites - 100% Pass)](#7-automated-verification-harness-15-test-suites---100-pass)
+   - [7. Automated Verification Harness (22 Test Suites)](#7-automated-verification-harness-22-test-suites)
 2. [القسم العربي (Arabic Section)]
    - [1. الملخص التنفيذي ونبذة عن المنظومة](#1-الملخص-التنفيذي-ونبذة-عن-المنظومة)
    - [2. ما تم إنجازه: التحول الرقمي الشامل لدفاتر الأكاديمية](#2-ما-تم-إنجازه-التحول-الرقمي-الشامل-لدفاتر-الأكاديمية)
@@ -21,7 +21,7 @@
    - [4. القوة التقنية ولماذا يجب اعتماد المنظومة فوراً](#4-القوة-التقنية-ولماذا-يجب-اعتماد-المنظومة-فوراً)
    - [5. خارطة الطريق الاستراتيجية (المراحل 1 - 4)](#5-خارطة-الطريق-الاستراتيجية-المراحل-1---4)
    - [6. أدلة التشغيل السريعة لموظفي إدارة التدريب الجوي (10 أدلة عملية)](#6-أدلة-التشغيل-السريعة-لموظفي-إدارة-التدريب-الجوي)
-   - [7. مصفوفة اختبارات التدقيق البرمجي الآلية (15 جناح اختبار - 100% نجاح)](#7-مصفوفة-اختبارات-التدقيق-البرمجي-الآلية)
+   - [7. مصفوفة اختبارات التدقيق البرمجي الآلية (22 جناح اختبار)](#7-مصفوفة-اختبارات-التدقيق-البرمجي-الآلية)
 3. [رسائل الإعلان الجاهزة عبر واتساب / Ready-to-Send WhatsApp Broadcast Kit](#8-رسائل-الإعلان-عبر-واتساب--ready-to-send-whatsapp-broadcast-kit)
 
 ---
@@ -269,7 +269,7 @@ gantt
 
 ---
 
-## 7. Automated Verification Harness (15 Test Suites - 100% Pass)
+## 7. Automated Verification Harness (22 Test Suites)
 
 The system includes an enterprise test suite verifying every domain algorithm, linguistic engine, and update subsystem:
 
@@ -290,6 +290,13 @@ The system includes an enterprise test suite verifying every domain algorithm, l
 | **13** | Non-Destructive Soft Delete & 1-Click Restore | Archive bin management and instant record restoration. | PASSED ✔ |
 | **14** | Background Excel Mirroring Engine | Asynchronous mirroring of all database transactions to `EAA_Master_Mirror.xlsx`. | PASSED ✔ |
 | **15** | Lightweight In-App Updater Engine | Manifest parsing, version comparison, delta patch selection, and offline handling. | PASSED ✔ |
+| **16** | Scheduling, Availability, Dispatch & Flight Lifecycle | Overlap/blackout checks, reasoned rescheduling/cancellation/no-show, checklist release, airborne/landed states, and duplicate-safe linked completion. | PASSED ✔ |
+| **17** | Electronic Flight Records & Fleet Utilization | Flight record persistence, calculated duration, resource Hobbs update, and audit evidence. | PASSED ✔ |
+| **18** | Assessment, Stage Check, and Gate Evidence | Assessment persistence, result tracking, and audit evidence. | PASSED ✔ |
+| **19** | Legacy SQLite Migration & Data Preservation | Additive upgrade of a representative legacy schema while preserving student/order identities and records. | PASSED ✔ |
+| **20** | Structured Database Failure Logging | Failed initialization is surfaced with a correlation ID and persisted attribution fields. | PASSED ✔ |
+| **21** | Identity, Approvals, Permissions, Sessions, and Immutable Audit | PBKDF2, service authorization, password re-verification, one-use transition approval, snapshots, session revocation, and append-only audit. | PASSED ✔ |
+| **22** | Versioned Curriculum & Regulatory Training Records | Controlled-document review states, approval-gated syllabus publication, prerequisite/cycle guards, regulatory stamps on grading, waiver evidence, and append-only objective trajectories. | PASSED ✔ |
 
 ---
 ---
@@ -297,7 +304,7 @@ The system includes an enterprise test suite verifying every domain algorithm, l
 # [القسم العربي (ARABIC SECTION)]
 
 ## 1. الملخص التنفيذي ونبذة عن المنظومة
-**منظومة إدارة وتتبع عمليات التدريب الجوي (EAA-TMS)** هي منصة سطح مكتب وطنية حديثة متكاملة (الإصدار التشغيلي المعتمد v2.2.4)، جرى تطويرها خصيصاً لتلبية متطلبات **إدارة التدريب بالكلية المصرية للطيران – الأكاديمية المصرية لعلوم الطيران (وزارة الطيران المدني)**.
+**منظومة إدارة وتتبع عمليات التدريب الجوي (EAA-TMS)** هي منصة سطح مكتب وطنية حديثة متكاملة (إصدار المشروع الحالي v2.2.8)، جرى تطويرها خصيصاً لتلبية متطلبات **إدارة التدريب بالكلية المصرية للطيران – الأكاديمية المصرية لعلوم الطيران (وزارة الطيران المدني)**.
 
 تم بناء وتصميم المنظومة لتعمل وفق أعلى معايير البرمجيات الرئاسية والسيادية:
 * **بيئة تشغيل محلية 100% (Offline-First)**: تعمل بكفاءة مطلقة في غرف العمليات ومرابض الطائرات (Flight Line) وهناجر مطار 6 أكتوبر دون الحاجة لأي اتصال بشبكة الإنترنت أو خوادم سحابية.
@@ -491,7 +498,7 @@ The system includes an enterprise test suite verifying every domain algorithm, l
 
 ## 7. مصفوفة اختبارات التدقيق البرمجي الآلية
 
-تتضمن المنظومة جناح تدقيق واختبار آلي متكامل يضم **15 جناح اختبار** تغطي كافة العمليات الحسابية واللغوية وتحديثات النظام بنسبة نجاح 100%:
+تتضمن المنظومة جناح تدقيق واختبار آلي متكامل يضم **22 جناح اختبار** تغطي العمليات الحالية؛ شغّل الأمر الموثق للتأكد من نتيجة التشغيل الأخيرة:
 
 | رقم الجناح | اسم الاختبار البرمجي | طبيعة الفحص والتحقق | حالة النجاح |
 | :---: | :--- | :--- | :---: |
@@ -510,6 +517,14 @@ The system includes an enterprise test suite verifying every domain algorithm, l
 | **13** | الأرشفة الآمنة واستعادة المحذوفات | التحقق من ميكانيزم Soft Delete واستعادة السجلات بنقرة واحدة. | اجتاز بنجاح ✔ |
 | **14** | المزامنة الخلفية مع ملف الإكسيل | تحديث ملف `EAA_Master_Mirror.xlsx` في الخلفية بعد كل عملية. | اجتاز بنجاح ✔ |
 | **15** | محرك التحديث التفاضلي الذكي | اختبار فحص المانيفست، وتحديد حزم الدلتا، ومعالجة وضع عدم الاتصال (Offline). | اجتاز بنجاح ✔ |
+| **16** | الجدولة والتوافر والتصريح ودورة الرحلة | منع التعارضات وفترات الإغلاق وقيود الطقس اليدوية وإعادة الجدولة المسببة والتصريح وسجل ما بعد الرحلة المرتبط. | اجتاز بنجاح ✔ |
+| **17** | سجلات الطيران واستغلال الأسطول | حفظ سجل الرحلة وحساب المدة وتحديث ساعات الطائرة وسجل التدقيق. | اجتاز بنجاح ✔ |
+| **18** | التقييم واختبارات المراحل وبوابات التقدم | حفظ نتيجة التقييم ومحاولته وإثبات سجل التدقيق. | اجتاز بنجاح ✔ |
+| **19** | ترقية قاعدة قديمة والحفاظ على البيانات | ترقية إضافية لمخطط قديم مع الحفاظ على هويات وسجلات الطلبة وأوامر التدريب. | اجتاز بنجاح ✔ |
+| **20** | سجل تشخيص منظم لأخطاء قاعدة البيانات | إظهار الفشل بمعرف تتبع وحفظ بيانات العملية والمستخدم والجلسة. | اجتاز بنجاح ✔ |
+| **21** | الهوية والاعتمادات والصلاحيات والجلسات والتدقيق المحصن | تجزئة كلمات المرور والتحقق من الاعتماد لمرة واحدة ولقطات التغييرات وإلغاء الجلسات ومنع تعديل سجل التدقيق. | اجتاز بنجاح ✔ |
+| **22** | المناهج المحفوظة بإصدارات وسجلات التدريب الرقمنة | مراحل مراجعة الوثائق الرقمنية والنشر المعتمد بوثيقة اعتماد وفحص متطلبات ما قبل التدرج والتوثيق التاريخي لنتائج التقييم. | اجتاز بنجاح ✔ |
+| **23** | الدورة الكاملة من الجلسة إلى التخرج والسجل الرسمي | ربط أهداف الجلسات، الخطط العلاجية، الفحص المرحلي، التخرج، مطابقة الساعات، التصدير الرسمي بالإكسيل والتوقيع الإلكتروني للمتدرب على السجل الرسمي. | اجتاز بنجاح ✔ |
 
 ---
 ---

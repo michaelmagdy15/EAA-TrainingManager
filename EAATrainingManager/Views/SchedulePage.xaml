@@ -8,6 +8,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
@@ -18,7 +19,12 @@
                 <TextBlock x:Name="ScheduleDescription" Text="جدولة الدروس والرحلات مع منع تعارض المتدرب أو المدرب أو الطائرة / جهاز المحاكاة." Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+                <ComboBox x:Name="ViewModePicker" Width="110" SelectionChanged="ViewModePicker_SelectionChanged">
+                    <ComboBoxItem x:Name="DayViewItem" Tag="Day" Content="يوم" />
+                    <ComboBoxItem x:Name="WeekViewItem" Tag="Week" Content="أسبوع" />
+                </ComboBox>
                 <CalendarDatePicker x:Name="PickerDate" DateChanged="PickerDate_DateChanged" />
+                <Button x:Name="AvailabilityButton" Click="Availability_Click" Content="فترات التوافر" />
                 <Button Click="Refresh_Click" Padding="12,7"><FontIcon Glyph="&#xE72C;" /></Button>
             </StackPanel>
         </Grid>
@@ -57,9 +63,10 @@
             </StackPanel>
         </Border>
 
-        <TextBlock x:Name="ErrorText" Grid.Row="2" Foreground="#DC3545" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="Collapsed" />
+        <TextBlock x:Name="OperationsMetricsText" Grid.Row="2" Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+        <TextBlock x:Name="ErrorText" Grid.Row="3" Foreground="#DC3545" FontWeight="SemiBold" TextWrapping="Wrap" Visibility="Collapsed" />
 
-        <Border Grid.Row="3" Style="{StaticResource FluentCardBorder}" Padding="0">
+        <Border Grid.Row="4" Style="{StaticResource FluentCardBorder}" Padding="0">
             <Grid>
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                 <Grid Background="{ThemeResource LayerFillColorAltBrush}" Padding="14,10">
@@ -71,24 +78,26 @@
                             <Border Padding="14,9" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
                                 <Grid ColumnSpacing="12">
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="90"/>
+                                         <ColumnDefinition Width="110"/>
                                         <ColumnDefinition Width="1.7*"/>
                                         <ColumnDefinition Width="1.4*"/>
                                         <ColumnDefinition Width="1.2*"/>
                                         <ColumnDefinition Width="1.2*"/>
                                         <ColumnDefinition Width="100"/>
-                                        <ColumnDefinition Width="190"/>
+                                         <ColumnDefinition Width="320"/>
                                     </Grid.ColumnDefinitions>
-                                    <TextBlock Text="{x:Bind TimeRangeText}" FontWeight="Bold" VerticalAlignment="Center" />
+                                     <StackPanel><TextBlock Text="{x:Bind DateText}" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/><TextBlock Text="{x:Bind TimeRangeText}" FontWeight="Bold" VerticalAlignment="Center" /></StackPanel>
                                     <StackPanel Grid.Column="1"><TextBlock Text="{x:Bind StudentBiDiName}" FontWeight="SemiBold"/><TextBlock Text="{x:Bind RegulatoryTrackText}" FontSize="11" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
                                     <TextBlock Grid.Column="2" Text="{x:Bind LessonBiDiName}" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="3" Text="{x:Bind InstructorName}" VerticalAlignment="Center" />
                                     <TextBlock Grid.Column="4" Text="{x:Bind ResourceName}" VerticalAlignment="Center" />
                                     <Border Grid.Column="5" Background="{x:Bind StatusBadgeColor}" CornerRadius="12" Padding="8,4" HorizontalAlignment="Center" VerticalAlignment="Center"><TextBlock Text="{x:Bind StatusText}" Foreground="White" FontSize="11" FontWeight="Bold"/></Border>
                                     <StackPanel Grid.Column="6" Orientation="Horizontal" Spacing="5" HorizontalAlignment="Right">
-                                        <Button Tag="{x:Bind}" Click="Dispatch_Click" Padding="7,4" ToolTipService.ToolTip="Dispatch"><FontIcon Glyph="&#xE768;" FontSize="12"/></Button>
-                                        <Button Tag="{x:Bind}" Click="Complete_Click" Padding="7,4" ToolTipService.ToolTip="Complete"><FontIcon Glyph="&#xE73E;" FontSize="12" Foreground="#198754"/></Button>
-                                        <Button Tag="{x:Bind}" Click="Cancel_Click" Padding="7,4" ToolTipService.ToolTip="Cancel"><FontIcon Glyph="&#xE711;" FontSize="12" Foreground="#DC3545"/></Button>
+                                        <Button Tag="{x:Bind}" Click="Dispatch_Click" IsEnabled="{x:Bind CanAdvance}" Padding="7,4" ToolTipService.ToolTip="Next dispatch state"><TextBlock Text="{x:Bind NextActionText}" FontSize="10"/></Button>
+                                        <Button Tag="{x:Bind}" Click="Complete_Click" IsEnabled="{x:Bind CanComplete}" Padding="7,4" ToolTipService.ToolTip="Complete flight"><TextBlock Text="{x:Bind PostFlightActionText}" FontSize="10" Foreground="#198754"/></Button>
+                                        <Button Tag="{x:Bind}" Click="Cancel_Click" IsEnabled="{x:Bind CanResolve}" Padding="7,4" ToolTipService.ToolTip="Cancel"><FontIcon Glyph="&#xE711;" FontSize="12" Foreground="#DC3545"/></Button>
+                                        <Button Tag="{x:Bind}" Click="NoShow_Click" IsEnabled="{x:Bind CanResolve}" Padding="7,4" ToolTipService.ToolTip="No-show"><FontIcon Glyph="&#xE77B;" FontSize="12"/></Button>
+                                        <Button Tag="{x:Bind}" Click="Reschedule_Click" IsEnabled="{x:Bind CanReschedule}" Padding="7,4" ToolTipService.ToolTip="Reschedule"><FontIcon Glyph="&#xE8AC;" FontSize="12"/></Button>
                                     </StackPanel>
                                 </Grid>
                             </Border>

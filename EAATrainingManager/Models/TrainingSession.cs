@@ -39,16 +39,37 @@ public class TrainingSession
     };
     public string StatusText => Status switch
     {
-        "Dispatched" => LocalizationService.Instance.Text("تم الترحيل", "Dispatched"),
+        "Confirmed" => LocalizationService.Instance.Text("مؤكدة", "Confirmed"),
+        "Released" or "Dispatched" => LocalizationService.Instance.Text("مصرح بالإقلاع", "Released"),
+        "Airborne" => LocalizationService.Instance.Text("في الجو", "Airborne"),
+        "Landed" => LocalizationService.Instance.Text("تم الهبوط", "Landed"),
         "Completed" => LocalizationService.Instance.Text("مكتملة", "Completed"),
         "Cancelled" => LocalizationService.Instance.Text("ملغاة", "Cancelled"),
+        "NoShow" => LocalizationService.Instance.Text("لم يحضر", "No-show"),
         _ => LocalizationService.Instance.Text("مجدولة", "Scheduled")
     };
     public string StatusBadgeColor => Status switch
     {
-        "Dispatched" => "#0D6EFD",
+        "Confirmed" or "Released" or "Dispatched" or "Airborne" => "#0D6EFD",
+        "Landed" => "#20A4A8",
         "Completed" => "#198754",
-        "Cancelled" => "#6C757D",
+        "Cancelled" or "NoShow" => "#6C757D",
         _ => "#6F42C1"
     };
+
+    public string NextActionText => Status switch
+    {
+        "Scheduled" => LocalizationService.Instance.Text("تأكيد الحجز", "Confirm booking"),
+        "Confirmed" => LocalizationService.Instance.Text("إصدار تصريح", "Release flight"),
+        "Released" or "Dispatched" => LocalizationService.Instance.Text("تسجيل الإقلاع", "Mark airborne"),
+        "Airborne" => LocalizationService.Instance.Text("تسجيل الهبوط", "Mark landed"),
+        "Landed" => LocalizationService.Instance.Text("إتمام سجل الرحلة", "Complete flight record"),
+        _ => string.Empty
+    };
+
+    public string PostFlightActionText => LocalizationService.Instance.Text("تسجيل ما بعد الرحلة", "Post-flight record");
+    public bool CanAdvance => Status is "Scheduled" or "Confirmed" or "Released" or "Dispatched" or "Airborne";
+    public bool CanComplete => Status == "Landed";
+    public bool CanResolve => Status is "Scheduled" or "Confirmed";
+    public bool CanReschedule => Status is "Scheduled" or "Confirmed";
 }

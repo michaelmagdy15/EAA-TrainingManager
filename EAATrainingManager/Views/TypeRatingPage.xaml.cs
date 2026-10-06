@@ -127,8 +127,20 @@ public sealed partial class TypeRatingPage : Page
     {
         if (sender is Button btn && btn.Tag is TrainingOrder order)
         {
-            await ViewModel.ToggleStatusAsync(order);
-            await LoadDataAsync();
+            if (order.IsActive)
+            {
+                var dialog = new Dialogs.CompleteCourseDialog(order, App.DatabaseService, App.ExcelMirrorService, App.BackupService)
+                {
+                    XamlRoot = this.XamlRoot
+                };
+                await dialog.ShowAsync();
+                if (dialog.IsCompletedSuccess)
+                    await LoadDataAsync();
+            }
+            else if (await Dialogs.ReopenOrderApprovalDialog.ShowAsync(order, this.XamlRoot))
+            {
+                await LoadDataAsync();
+            }
         }
     }
 }

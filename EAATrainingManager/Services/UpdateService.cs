@@ -13,8 +13,8 @@ public class UpdateCheckResult
     public bool HasUpdate { get; set; }
     public bool IsUpToDate { get; set; }
     public bool IsOffline { get; set; }
-    public string CurrentVersion { get; set; } = "2.2.1";
-    public string LatestVersion { get; set; } = "2.2.8";
+    public string CurrentVersion { get; set; } = "2.2.8";
+    public string LatestVersion { get; set; } = "2.2.9";
     public double PatchSizeMb { get; set; } = 0.0;
     public string ReleaseNotes { get; set; } = string.Empty;
     public string Message { get; set; } = string.Empty;
@@ -23,12 +23,12 @@ public class UpdateCheckResult
 
 public class UpdateService
 {
-    private const string CurrentAppVersion = "2.2.8";
+    private const string CurrentAppVersion = "2.2.9";
     private const string RepoOwner = "michaelmagdy15";
     private const string RepoName = "EAA-TrainingManager";
     
     // Read-only token for private repo updates (fine-grained: Contents & Releases Read-Only)
-    public static string ReadOnlyToken { get; set; } = "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";
+    public static string ReadOnlyToken { get; set; } = Environment.GetEnvironmentVariable("EAA_TMS_GITHUB_TOKEN") ?? string.Empty;
 
     private readonly HttpClient _httpClient;
 
@@ -281,7 +281,11 @@ public class UpdateService
 
             if (File.Exists(tempFilePath))
             {
-                try { File.Delete(tempFilePath); } catch { }
+                try { File.Delete(tempFilePath); }
+                catch (Exception cleanupException)
+                {
+                    AppLogService.LogException("Update.CleanupTemporaryFile", cleanupException, "TemporaryFile", Path.GetFileName(tempFilePath));
+                }
             }
 
             // Download binary stream cleanly without GitHub authorization header (compatible with Azure Blob / S3 SAS)

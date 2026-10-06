@@ -1,20 +1,20 @@
 # Egyptian Aviation Academy (EAA) Training Management System (EAA-TMS)
 ### منظومة إدارة وتتبع عمليات التدريب الجوي – الأكاديمية المصرية لعلوم الطيران (وزارة الطيران المدني)
 
-[![Version](https://img.shields.io/badge/Release-v2.2.4-blue?logo=github&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager/releases/latest)
+[![Version](https://img.shields.io/badge/Release-v2.2.8-blue?logo=github&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager/releases/latest)
 [![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%2010-0078D6?logo=windows&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![Framework](https://img.shields.io/badge/Framework-.NET%209%20%7C%20C%23%2013-512BD4?logo=dotnet&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![UI Engine](https://img.shields.io/badge/UI-WinUI%203%20(Windows%20App%20SDK)-0078D4)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![Database](https://img.shields.io/badge/Database-SQLite%20(WAL%20Mode)-003B57?logo=sqlite&logoColor=white)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![Mode](https://img.shields.io/badge/Architecture-100%25%20Offline--First-success)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 [![In-App Updates](https://img.shields.io/badge/Updates-Delta%20Patches%20(~700%20KB)-orange)](https://github.com/michaelmagdy15/EAA-TrainingManager)
-[![Tests](https://img.shields.io/badge/Verification%20Tests-15%2F15%20Passing%20(100%25)-brightgreen)](https://github.com/michaelmagdy15/EAA-TrainingManager)
+[![Tests](https://img.shields.io/badge/Verification%20Suites-21-blue)](https://github.com/michaelmagdy15/EAA-TrainingManager)
 
 ---
 
 ## 📖 Overview | نظرة عامة
 
-**EAA-TMS** (Version 2.2.4) is a mission-critical, 100% offline-first Windows 11 desktop management system engineered specifically for the Flight Training Directorate of the **Egyptian Aviation Academy (الأكاديمية المصرية لعلوم الطيران)** under the Ministry of Civil Aviation.
+**EAA-TMS** (Version 2.2.8) is a mission-critical, 100% offline-first Windows 11 desktop management system engineered specifically for the Flight Training Directorate of the **Egyptian Aviation Academy (الأكاديمية المصرية لعلوم الطيران)** under the Ministry of Civil Aviation.
 
 It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام حر)`, `141 (ا نظام)`, `تقييم (د)`) with an enterprise-grade digital aviation terminal. The application provides two-way operational management, student identity deduplication, demographic intelligence, automatic background data protection, in-app delta updates, and one-click release automation.
 
@@ -67,6 +67,17 @@ It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام ح
 - **Bilingual Action Buttons**: Dynamic binding for trajectory inspection buttons (`TrajectoryButtonText`).
 - **Global Crash Shield**: Top-level exception handling in `App.xaml.cs` (`UnhandledException` and `UnobservedTaskException`) writing diagnostic crash logs to disk while displaying graceful bilingual dialogs, preventing silent desktop crashes.
 
+### 9. Identity, Permissions & Approval Evidence
+- First launch creates an administrator account; later access requires sign-in with salted PBKDF2 password storage and a selected EAA location.
+- Role grants are enforced in database services as well as navigation, and disabling an account revokes active sessions without deleting attribution.
+- Audit events are append-only and include user, session, location, entity version, and before/after snapshots; authorized users can filter and export CSV.
+- Training-order completion requires password re-verification, a recorded reason, and a one-use approval bound to the signer, session, location, entity, and transition.
+
+### 10. Dispatch & Flight Execution Foundation
+- Training sessions progress through planned, confirmed, released, airborne, landed, and completed states; cancellation and no-show require recorded reasons.
+- Dispatch release stores a checklist, weather briefing, flight-information-file reference, operator/session/location attribution, and release time.
+- A linked flight record can complete a landed session and updates aircraft Hobbs hours in the same transaction.
+
 ---
 
 ## 🚀 Quick Start | التشغيل السريع
@@ -74,7 +85,8 @@ It replaces legacy, error-prone multi-sheet Excel workbooks (`61 (ج نظام ح
 ### Option A: Run the Standalone Single-File `.exe` (Recommended)
 1. Download `EAATrainingManager.exe` from the latest [GitHub Release](https://github.com/michaelmagdy15/EAA-TrainingManager/releases/latest).
 2. Double-click `EAATrainingManager.exe` to run.
-3. The app starts immediately. Data is stored safely in `%LocalAppData%\EAA_TrainingManager\`.
+3. On first launch, create the initial administrator account; subsequent launches require sign-in and location selection.
+4. Data is stored in `%LocalAppData%\EAA_TrainingManager\`.
 
 ### Option B: Build & Test from Source
 Ensure you have [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) and Windows 10/11:
@@ -84,7 +96,7 @@ Ensure you have [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0) a
 git clone https://github.com/michaelmagdy15/EAA-TrainingManager.git
 cd EAA-TrainingManager
 
-# Run the 15 Automated Verification Test Suites
+# Run the 21 Automated Verification Test Suites
 dotnet run --project EAATrainingManager.Tests/EAATrainingManager.Tests.csproj
 
 # Build the WinUI 3 Desktop Application
@@ -102,7 +114,7 @@ publish_release.bat
 
 ---
 
-## 🧪 Verification Test Suites (100% Pass)
+## 🧪 Verification Test Suites
 
 The project includes an automated test harness covering all domain algorithms and update subsystems:
 
@@ -122,8 +134,16 @@ The project includes an automated test harness covering all domain algorithms an
 [TEST SUITE 13] Non-Destructive Soft Delete & 1-Click Restore ........... PASSED ✔
 [TEST SUITE 14] Background Excel Mirroring Engine ....................... PASSED ✔
 [TEST SUITE 15] Lightweight In-App Updater Engine ....................... PASSED ✔
+[TEST SUITE 16] Scheduling, Availability & Dispatch Flight Lifecycle .... PASSED ✔
+[TEST SUITE 17] Electronic Flight Records & Fleet Utilization ............ PASSED ✔
+[TEST SUITE 18] Assessment, Stage Check & Gate Evidence .................. PASSED ✔
+[TEST SUITE 19] Legacy SQLite Migration & Data Preservation .............. PASSED ✔
+[TEST SUITE 20] Structured Database Failure Logging ...................... PASSED ✔
+[TEST SUITE 21] Identity, Approval, Permissions & Immutable Audit ........ PASSED ✔
+[TEST SUITE 22] Versioned Curriculum & Regulatory Training Records ...... PASSED ✔
+[TEST SUITE 23] Curriculum End-to-End, Hour Reconciliation & E-Signature . PASSED ✔
 
-All 15 test suites completed with 100% success!
+The harness currently contains 23 suites. Run the command above for the latest result.
 ```
 
 ---
@@ -137,7 +157,7 @@ All 15 test suites completed with 100% success!
 
 ## 📄 Documentation
 
-For full system architecture, user manuals, and the WhatsApp communication kit, see [`MASTER.md`](MASTER.md).
+For full system architecture, user manuals, and the WhatsApp communication kit, see [`MASTER.md`](MASTER.md). See [`DATABASE_INVENTORY.md`](DATABASE_INVENTORY.md) for the SQLite schema and [`PERMISSION_MATRIX.md`](PERMISSION_MATRIX.md) for role grants and approval controls.
 
 ---
 

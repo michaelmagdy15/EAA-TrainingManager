@@ -12,32 +12,86 @@ namespace EAATrainingManager.Services;
 
 public class DatabaseService
 {
+    private const int CurrentSchemaVersion = 13;
     private readonly string _dbPath;
     private readonly string _connectionString;
+    private readonly bool _allowDestructiveTestReset;
+    private IdentityService? _identityService;
 
-    public DatabaseService()
+    public DatabaseService(string? databasePath = null, bool allowDestructiveTestReset = false)
     {
-        string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string appFolder = Path.Combine(localAppData, "EAA_TrainingManager");
-        Directory.CreateDirectory(appFolder);
+        _allowDestructiveTestReset = allowDestructiveTestReset;
+        if (string.IsNullOrWhiteSpace(databasePath))
+        {
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string appFolder = Path.Combine(localAppData, "EAA_TrainingManager");
+            Directory.CreateDirectory(appFolder);
+            databasePath = Path.Combine(appFolder, "eaa_training.db");
+        }
+        else
+        {
+            databasePath = Path.GetFullPath(databasePath);
+            string? databaseDirectory = Path.GetDirectoryName(databasePath);
+            if (!string.IsNullOrEmpty(databaseDirectory))
+                Directory.CreateDirectory(databaseDirectory);
+        }
 
-        _dbPath = Path.Combine(appFolder, "eaa_training.db");
-        _connectionString = $"Data Source={_dbPath};";
+        _dbPath = databasePath;
+        _connectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = _dbPath
+        }.ToString();
     }
 
     public string GetDatabasePath() => _dbPath;
     public string DatabasePath => _dbPath;
 
+    internal void AttachIdentityService(IdentityService identityService) => _identityService = identityService;
+
+    internal async Task<SqliteConnection> OpenIdentityConnectionAsync()
+    {
+        var connection = new SqliteConnection(_connectionString);
+        try
+        {
+            await connection.OpenAsync();
+            return connection;
+        }
+        catch
+        {
+            await connection.DisposeAsync();
+            throw;
+        }
+    }
+
     public async Task InitializeAsync()
+    {
+        string correlationId = Guid.NewGuid().ToString("N");
+        try
+        {
+            await InitializeCoreAsync();
+        }
+        catch (Exception ex)
+        {
+            AppLogService.LogException("Database.Initialize", ex, "SQLiteDatabase", Path.GetFileName(_dbPath), correlationId);
+            throw new InvalidOperationException($"Database initialization failed. Correlation ID: {correlationId}", ex);
+        }
+    }
+
+    private async Task InitializeCoreAsync()
     {
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
 
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            PRAGMA journal_mode = WAL;
-            PRAGMA foreign_keys = ON;
+        using (var settingsCmd = connection.CreateCommand())
+        {
+            settingsCmd.CommandText = "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;";
+            await settingsCmd.ExecuteNonQueryAsync();
+        }
 
+        using var migration = connection.BeginTransaction();
+        using var cmd = connection.CreateCommand();
+        cmd.Transaction = migration;
+        cmd.CommandText = @"
             CREATE TABLE IF NOT EXISTS Students (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
                 NormalizedName TEXT NOT NULL UNIQUE,
@@ -70,8 +124,6 @@ public class DatabaseService
             CREATE INDEX IF NOT EXISTS idx_students_norm ON Students(NormalizedName);
             CREATE INDEX IF NOT EXISTS idx_orders_student ON TrainingOrders(StudentId);
             CREATE INDEX IF NOT EXISTS idx_orders_num_yr ON TrainingOrders(OrderNumber, Year);
-            CREATE INDEX IF NOT EXISTS idx_orders_year ON TrainingOrders(AcademicYear);
-            CREATE INDEX IF NOT EXISTS idx_orders_track ON TrainingOrders(RegulatoryTrack);
             CREATE INDEX IF NOT EXISTS idx_orders_status ON TrainingOrders(Status);
             CREATE INDEX IF NOT EXISTS idx_orders_milestone ON TrainingOrders(Milestone);
 
@@ -153,11 +205,29 @@ public class DatabaseService
                 Action TEXT NOT NULL,
                 Summary TEXT NOT NULL,
                 Actor TEXT NOT NULL DEFAULT 'Local Operator',
-                OccurredAt TEXT NOT NULL
+                OccurredAt TEXT NOT NULL,
+                UserId INTEGER,
+                SessionId TEXT,
+                LocationId INTEGER,
+                VersionNo INTEGER NOT NULL DEFAULT 1,
+                BeforeJson TEXT,
+                AfterJson TEXT
             );
 
             CREATE INDEX IF NOT EXISTS idx_audit_entity ON AuditEvents(EntityType, EntityId, OccurredAt DESC);
             CREATE INDEX IF NOT EXISTS idx_audit_time ON AuditEvents(OccurredAt DESC);
+
+            CREATE TRIGGER IF NOT EXISTS trg_audit_events_no_update
+            BEFORE UPDATE ON AuditEvents
+            BEGIN
+                SELECT RAISE(ABORT, 'Audit events are append-only.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_audit_events_no_delete
+            BEFORE DELETE ON AuditEvents
+            BEGIN
+                SELECT RAISE(ABORT, 'Audit events are append-only.');
+            END;
 
             CREATE TABLE IF NOT EXISTS ComplianceRecords (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -228,13 +298,560 @@ public class DatabaseService
                 CreatedAt TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_personnel_role ON PersonnelRecords(Role, IsActive);
+
+            CREATE TABLE IF NOT EXISTS Users (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserName TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                DisplayName TEXT NOT NULL,
+                PasswordHash TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL,
+                DisabledAt TEXT
+            );
+
+            CREATE TRIGGER IF NOT EXISTS trg_users_no_delete
+            BEFORE DELETE ON Users
+            BEGIN
+                SELECT RAISE(ABORT, 'User accounts must be disabled, not deleted.');
+            END;
+
+            CREATE TABLE IF NOT EXISTS Roles (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                RoleKey TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                DisplayName TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS Permissions (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Resource TEXT NOT NULL COLLATE NOCASE,
+                Level INTEGER NOT NULL,
+                UNIQUE(Resource, Level)
+            );
+
+            CREATE TABLE IF NOT EXISTS UserRoles (
+                UserId INTEGER NOT NULL,
+                RoleId INTEGER NOT NULL,
+                AssignedAt TEXT NOT NULL,
+                AssignedByUserId INTEGER,
+                PRIMARY KEY(UserId, RoleId),
+                FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
+                FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE,
+                FOREIGN KEY (AssignedByUserId) REFERENCES Users(Id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS RolePermissions (
+                RoleId INTEGER NOT NULL,
+                PermissionId INTEGER NOT NULL,
+                PRIMARY KEY(RoleId, PermissionId),
+                FOREIGN KEY (RoleId) REFERENCES Roles(Id) ON DELETE CASCADE,
+                FOREIGN KEY (PermissionId) REFERENCES Permissions(Id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS Locations (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                LocationCode TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                DisplayName TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS UserLocations (
+                UserId INTEGER NOT NULL,
+                LocationId INTEGER NOT NULL,
+                AssignedAt TEXT NOT NULL,
+                AssignedByUserId INTEGER,
+                PRIMARY KEY(UserId, LocationId),
+                FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id) ON DELETE CASCADE,
+                FOREIGN KEY (AssignedByUserId) REFERENCES Users(Id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS UserSessions (
+                SessionId TEXT PRIMARY KEY,
+                UserId INTEGER NOT NULL,
+                LocationId INTEGER,
+                StartedAt TEXT NOT NULL,
+                ExpiresAt TEXT NOT NULL,
+                EndedAt TEXT,
+                ClientName TEXT NOT NULL DEFAULT 'EAA-TMS Desktop',
+                FOREIGN KEY (UserId) REFERENCES Users(Id) ON DELETE CASCADE,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_user_roles_user ON UserRoles(UserId);
+            CREATE INDEX IF NOT EXISTS idx_role_permissions_permission ON RolePermissions(PermissionId);
+            CREATE INDEX IF NOT EXISTS idx_locations_active ON Locations(IsActive, DisplayName);
+            CREATE INDEX IF NOT EXISTS idx_user_locations_location ON UserLocations(LocationId, UserId);
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON UserSessions(UserId, StartedAt DESC);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON UserSessions(ExpiresAt, EndedAt);
+
+            CREATE TABLE IF NOT EXISTS ApprovalRecords (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                EntityType TEXT NOT NULL,
+                EntityId INTEGER NOT NULL,
+                Transition TEXT NOT NULL,
+                ApproverUserId INTEGER NOT NULL,
+                SignerName TEXT NOT NULL,
+                SessionId TEXT NOT NULL,
+                LocationId INTEGER,
+                Reason TEXT NOT NULL,
+                ApprovedAt TEXT NOT NULL,
+                ValidUntil TEXT NOT NULL,
+                EvidenceFingerprint TEXT NOT NULL,
+                FOREIGN KEY (ApproverUserId) REFERENCES Users(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (SessionId) REFERENCES UserSessions(SessionId) ON DELETE RESTRICT,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ApprovalUses (
+                ApprovalId INTEGER PRIMARY KEY,
+                ConsumedByUserId INTEGER NOT NULL,
+                SessionId TEXT NOT NULL,
+                ConsumedAt TEXT NOT NULL,
+                FOREIGN KEY (ApprovalId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ConsumedByUserId) REFERENCES Users(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (SessionId) REFERENCES UserSessions(SessionId) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_approval_entity ON ApprovalRecords(EntityType, EntityId, Transition, ApprovedAt DESC);
+
+            CREATE TABLE IF NOT EXISTS DispatchReleases (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                TrainingSessionId INTEGER NOT NULL UNIQUE,
+                ReleaseReference TEXT NOT NULL,
+                WeatherBriefing TEXT NOT NULL,
+                FlightInformationFile TEXT NOT NULL,
+                ChecklistJson TEXT NOT NULL,
+                Reason TEXT NOT NULL,
+                ReleasedByUserId INTEGER,
+                SessionId TEXT,
+                LocationId INTEGER,
+                ReleasedAt TEXT NOT NULL,
+                FOREIGN KEY (TrainingSessionId) REFERENCES TrainingSessions(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ReleasedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (SessionId) REFERENCES UserSessions(SessionId) ON DELETE SET NULL,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_dispatch_release_time ON DispatchReleases(ReleasedAt DESC);
+
+            CREATE TRIGGER IF NOT EXISTS trg_dispatch_releases_no_update
+            BEFORE UPDATE ON DispatchReleases
+            BEGIN
+                SELECT RAISE(ABORT, 'Dispatch releases are append-only.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_dispatch_releases_no_delete
+            BEFORE DELETE ON DispatchReleases
+            BEGIN
+                SELECT RAISE(ABORT, 'Dispatch releases are append-only.');
+            END;
+
+            CREATE TABLE IF NOT EXISTS SessionExceptions (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                TrainingSessionId INTEGER NOT NULL,
+                Outcome TEXT NOT NULL,
+                Reason TEXT NOT NULL,
+                RecordedByUserId INTEGER,
+                SessionId TEXT,
+                LocationId INTEGER,
+                RecordedAt TEXT NOT NULL,
+                FOREIGN KEY (TrainingSessionId) REFERENCES TrainingSessions(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (RecordedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (SessionId) REFERENCES UserSessions(SessionId) ON DELETE SET NULL,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_session_exceptions_session ON SessionExceptions(TrainingSessionId, RecordedAt DESC);
+
+            CREATE TRIGGER IF NOT EXISTS trg_session_exceptions_no_update
+            BEFORE UPDATE ON SessionExceptions
+            BEGIN
+                SELECT RAISE(ABORT, 'Session exception records are append-only.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_session_exceptions_no_delete
+            BEFORE DELETE ON SessionExceptions
+            BEGIN
+                SELECT RAISE(ABORT, 'Session exception records are append-only.');
+            END;
+
+            CREATE TABLE IF NOT EXISTS AvailabilityWindows (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ResourceType TEXT NOT NULL,
+                ResourceName TEXT NOT NULL,
+                StartAt TEXT NOT NULL,
+                EndAt TEXT NOT NULL,
+                AvailabilityState TEXT NOT NULL DEFAULT 'Unavailable',
+                Reason TEXT NOT NULL,
+                Location TEXT,
+                CreatedByUserId INTEGER,
+                SessionId TEXT,
+                LocationId INTEGER,
+                CreatedAt TEXT NOT NULL,
+                IsArchived INTEGER NOT NULL DEFAULT 0,
+                ArchivedAt TEXT,
+                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (SessionId) REFERENCES UserSessions(SessionId) ON DELETE SET NULL,
+                FOREIGN KEY (LocationId) REFERENCES Locations(Id) ON DELETE SET NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_availability_resource_window ON AvailabilityWindows(ResourceType, ResourceName, StartAt, EndAt, IsArchived);
+
+            CREATE TABLE IF NOT EXISTS NotificationOutbox (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                EventType TEXT NOT NULL,
+                EntityType TEXT NOT NULL,
+                EntityId INTEGER NOT NULL,
+                RecipientType TEXT NOT NULL,
+                RecipientKey TEXT NOT NULL,
+                PayloadJson TEXT NOT NULL,
+                Status TEXT NOT NULL DEFAULT 'Pending',
+                AttemptCount INTEGER NOT NULL DEFAULT 0,
+                LastError TEXT,
+                CreatedAt TEXT NOT NULL,
+                DeliveredAt TEXT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_notification_status_created ON NotificationOutbox(Status, CreatedAt);
+            CREATE INDEX IF NOT EXISTS idx_notification_entity ON NotificationOutbox(EntityType, EntityId);
+
+            CREATE TRIGGER IF NOT EXISTS trg_approval_records_no_update
+            BEFORE UPDATE ON ApprovalRecords
+            BEGIN
+                SELECT RAISE(ABORT, 'Approval records are append-only.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_approval_records_no_delete
+            BEFORE DELETE ON ApprovalRecords
+            BEGIN
+                SELECT RAISE(ABORT, 'Approval records are append-only.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_approval_uses_no_update
+            BEFORE UPDATE ON ApprovalUses
+            BEGIN
+                SELECT RAISE(ABORT, 'Approval usage records are append-only.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_approval_uses_no_delete
+            BEFORE DELETE ON ApprovalUses
+            BEGIN
+                SELECT RAISE(ABORT, 'Approval usage records are append-only.');
+            END;
+
+            CREATE TABLE IF NOT EXISTS RegulatoryFrameworks (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                FrameworkCode TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                Authority TEXT NOT NULL,
+                DisplayName TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS RegulatoryDocuments (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                FrameworkId INTEGER NOT NULL,
+                Part TEXT NOT NULL,
+                Issue TEXT NOT NULL,
+                Revision TEXT NOT NULL,
+                EffectiveFrom TEXT,
+                EffectiveTo TEXT,
+                SourceFile TEXT NOT NULL,
+                ApprovingAuthority TEXT NOT NULL,
+                ReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                CreatedAt TEXT NOT NULL,
+                CreatedByUserId INTEGER,
+                ApprovalRecordId INTEGER,
+                FOREIGN KEY (FrameworkId) REFERENCES RegulatoryFrameworks(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (ApprovalRecordId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT
+            );
+
+            CREATE TABLE IF NOT EXISTS CurriculumTemplates (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                StreamKey TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                ArabicName TEXT NOT NULL,
+                EnglishName TEXT NOT NULL,
+                IsActive INTEGER NOT NULL DEFAULT 1,
+                CreatedAt TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS CurriculumVersions (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CurriculumTemplateId INTEGER NOT NULL,
+                VersionLabel TEXT NOT NULL,
+                EffectiveFrom TEXT NOT NULL,
+                EffectiveTo TEXT,
+                RegulatoryDocumentId INTEGER,
+                ProgramApprovalId INTEGER,
+                ReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                Notes TEXT,
+                CreatedAt TEXT NOT NULL,
+                CreatedByUserId INTEGER,
+                PublishedByUserId INTEGER,
+                PublishedAt TEXT,
+                PublicationApprovalId INTEGER,
+                FOREIGN KEY (CurriculumTemplateId) REFERENCES CurriculumTemplates(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (RegulatoryDocumentId) REFERENCES RegulatoryDocuments(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (PublishedByUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (PublicationApprovalId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT,
+                UNIQUE(CurriculumTemplateId, VersionLabel)
+            );
+
+            CREATE TABLE IF NOT EXISTS ProgramApprovals (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                StreamKey TEXT NOT NULL,
+                CurriculumVersionId INTEGER NOT NULL,
+                RegulatoryDocumentId INTEGER NOT NULL,
+                TrainingMethod TEXT NOT NULL,
+                AircraftOrSimulatorScope TEXT NOT NULL,
+                ValidFrom TEXT NOT NULL,
+                ValidTo TEXT,
+                Limitations TEXT,
+                ReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                ApprovalRecordId INTEGER,
+                ApprovedByUserId INTEGER,
+                ApprovedAt TEXT,
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (CurriculumVersionId) REFERENCES CurriculumVersions(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (RegulatoryDocumentId) REFERENCES RegulatoryDocuments(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ApprovalRecordId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ApprovedByUserId) REFERENCES Users(Id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS CurriculumLessons (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CurriculumVersionId INTEGER NOT NULL,
+                StageCode TEXT NOT NULL,
+                LessonCode TEXT NOT NULL,
+                ArabicTitle TEXT NOT NULL,
+                EnglishTitle TEXT NOT NULL,
+                SequenceNumber INTEGER NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (CurriculumVersionId) REFERENCES CurriculumVersions(Id) ON DELETE RESTRICT,
+                UNIQUE(CurriculumVersionId, LessonCode)
+            );
+
+            CREATE TABLE IF NOT EXISTS TrainingObjectives (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                CurriculumLessonId INTEGER NOT NULL,
+                ObjectiveCode TEXT NOT NULL,
+                ArabicDescription TEXT NOT NULL,
+                EnglishDescription TEXT NOT NULL,
+                CompletionStandard TEXT NOT NULL,
+                EvidenceType TEXT NOT NULL,
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (CurriculumLessonId) REFERENCES CurriculumLessons(Id) ON DELETE RESTRICT,
+                UNIQUE(CurriculumLessonId, ObjectiveCode)
+            );
+
+            CREATE TABLE IF NOT EXISTS ObjectivePrerequisites (
+                ObjectiveId INTEGER NOT NULL,
+                PrerequisiteObjectiveId INTEGER NOT NULL,
+                PRIMARY KEY(ObjectiveId, PrerequisiteObjectiveId),
+                FOREIGN KEY (ObjectiveId) REFERENCES TrainingObjectives(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (PrerequisiteObjectiveId) REFERENCES TrainingObjectives(Id) ON DELETE RESTRICT,
+                CHECK(ObjectiveId <> PrerequisiteObjectiveId)
+            );
+
+            CREATE TABLE IF NOT EXISTS RequirementRules (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                RuleIdentifier TEXT NOT NULL UNIQUE,
+                RegulatoryDocumentId INTEGER NOT NULL,
+                ApplicabilityJson TEXT NOT NULL,
+                ConditionJson TEXT NOT NULL,
+                EvidenceType TEXT NOT NULL,
+                EffectiveFrom TEXT NOT NULL,
+                EffectiveTo TEXT,
+                ReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                CreatedAt TEXT NOT NULL,
+                CreatedByUserId INTEGER,
+                FOREIGN KEY (RegulatoryDocumentId) REFERENCES RegulatoryDocuments(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CreatedByUserId) REFERENCES Users(Id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS ComplianceEvidence (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                SourceRecordType TEXT NOT NULL,
+                SourceRecordId INTEGER NOT NULL,
+                RequirementRuleId INTEGER NOT NULL,
+                SignerUserId INTEGER,
+                EvidenceDate TEXT NOT NULL,
+                AttachmentReference TEXT,
+                VerificationStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (RequirementRuleId) REFERENCES RequirementRules(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (SignerUserId) REFERENCES Users(Id) ON DELETE SET NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS RegulatoryExceptions (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ExceptionType TEXT NOT NULL,
+                EntityType TEXT NOT NULL,
+                EntityId INTEGER NOT NULL,
+                RequirementRuleId INTEGER,
+                ApprovalRecordId INTEGER,
+                AuthorityDecisionReference TEXT NOT NULL,
+                ExpiresAt TEXT,
+                EvidenceReference TEXT NOT NULL,
+                ReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                CreatedAt TEXT NOT NULL,
+                FOREIGN KEY (RequirementRuleId) REFERENCES RequirementRules(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ApprovalRecordId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT
+            );
+
+            CREATE TABLE IF NOT EXISTS ObjectiveProgress (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                StudentId INTEGER NOT NULL,
+                TrainingOrderId INTEGER NOT NULL,
+                ObjectiveId INTEGER NOT NULL,
+                CurriculumVersionId INTEGER NOT NULL,
+                AttemptNumber INTEGER NOT NULL DEFAULT 1,
+                Result TEXT NOT NULL DEFAULT 'Incomplete',
+                GraderUserId INTEGER,
+                TrainingSessionId INTEGER,
+                ApprovalRecordId INTEGER,
+                EvaluatedAt TEXT NOT NULL,
+                Remarks TEXT,
+                RegulatoryReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                RegulatoryDocumentId INTEGER,
+                RegulatoryRevision TEXT,
+                FOREIGN KEY (StudentId) REFERENCES Students(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (TrainingOrderId) REFERENCES TrainingOrders(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ObjectiveId) REFERENCES TrainingObjectives(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CurriculumVersionId) REFERENCES CurriculumVersions(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (GraderUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (TrainingSessionId) REFERENCES TrainingSessions(Id) ON DELETE SET NULL,
+                FOREIGN KEY (ApprovalRecordId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (RegulatoryDocumentId) REFERENCES RegulatoryDocuments(Id) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_regulatory_documents_framework ON RegulatoryDocuments(FrameworkId, Part, Issue, Revision);
+            CREATE INDEX IF NOT EXISTS idx_curriculum_versions_template ON CurriculumVersions(CurriculumTemplateId, EffectiveFrom DESC);
+            CREATE INDEX IF NOT EXISTS idx_program_approvals_stream ON ProgramApprovals(StreamKey, ReviewStatus, ValidFrom);
+            CREATE INDEX IF NOT EXISTS idx_curriculum_lessons_version ON CurriculumLessons(CurriculumVersionId, SequenceNumber);
+            CREATE INDEX IF NOT EXISTS idx_training_objectives_lesson ON TrainingObjectives(CurriculumLessonId, ObjectiveCode);
+            CREATE INDEX IF NOT EXISTS idx_objective_prerequisites_prereq ON ObjectivePrerequisites(PrerequisiteObjectiveId);
+            CREATE INDEX IF NOT EXISTS idx_requirement_rules_document ON RequirementRules(RegulatoryDocumentId, ReviewStatus);
+            CREATE INDEX IF NOT EXISTS idx_compliance_evidence_rule ON ComplianceEvidence(RequirementRuleId, VerificationStatus);
+            CREATE INDEX IF NOT EXISTS idx_regulatory_exceptions_entity ON RegulatoryExceptions(EntityType, EntityId, ReviewStatus);
+            CREATE INDEX IF NOT EXISTS idx_objective_progress_student ON ObjectiveProgress(StudentId, TrainingOrderId, EvaluatedAt DESC);
+            CREATE INDEX IF NOT EXISTS idx_objective_progress_version ON ObjectiveProgress(CurriculumVersionId, ObjectiveId, Result);
+
+            CREATE TRIGGER IF NOT EXISTS trg_objective_progress_no_update
+            BEFORE UPDATE ON ObjectiveProgress
+            BEGIN
+                SELECT RAISE(ABORT, 'Objective progress records are append-only; record a new attempt instead.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_objective_progress_no_delete
+            BEFORE DELETE ON ObjectiveProgress
+            BEGIN
+                SELECT RAISE(ABORT, 'Objective progress records are append-only training evidence.');
+            END;
+
+            CREATE TABLE IF NOT EXISTS TrainingSessionObjectives (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                TrainingSessionId INTEGER NOT NULL,
+                ObjectiveId INTEGER NOT NULL,
+                CurriculumLessonId INTEGER NOT NULL,
+                LinkedAt TEXT NOT NULL,
+                LinkedByUserId INTEGER,
+                FOREIGN KEY (TrainingSessionId) REFERENCES TrainingSessions(Id) ON DELETE CASCADE,
+                FOREIGN KEY (ObjectiveId) REFERENCES TrainingObjectives(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CurriculumLessonId) REFERENCES CurriculumLessons(Id) ON DELETE RESTRICT
+            );
+
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_session_objectives_unique ON TrainingSessionObjectives(TrainingSessionId, ObjectiveId);
+            CREATE INDEX IF NOT EXISTS idx_session_objectives_objective ON TrainingSessionObjectives(ObjectiveId);
+
+            CREATE TABLE IF NOT EXISTS RemedialPlans (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ObjectiveProgressId INTEGER NOT NULL,
+                StudentId INTEGER NOT NULL,
+                TrainingOrderId INTEGER NOT NULL,
+                ObjectiveId INTEGER NOT NULL,
+                CurriculumVersionId INTEGER NOT NULL,
+                ArabicPlan TEXT NOT NULL,
+                EnglishPlan TEXT NOT NULL,
+                AssignedInstructorUserId INTEGER,
+                Status TEXT NOT NULL DEFAULT 'Open',
+                DueDate TEXT,
+                OpenedAt TEXT NOT NULL,
+                CompletedAt TEXT,
+                CompletionRemarks TEXT,
+                ApprovalRecordId INTEGER,
+                RegulatoryReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                CreatedByUserId INTEGER,
+                FOREIGN KEY (ObjectiveProgressId) REFERENCES ObjectiveProgress(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (StudentId) REFERENCES Students(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (TrainingOrderId) REFERENCES TrainingOrders(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ObjectiveId) REFERENCES TrainingObjectives(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CurriculumVersionId) REFERENCES CurriculumVersions(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (AssignedInstructorUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (ApprovalRecordId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_remedial_student_order ON RemedialPlans(StudentId, TrainingOrderId, Status);
+            CREATE INDEX IF NOT EXISTS idx_remedial_progress ON RemedialPlans(ObjectiveProgressId);
+
+            CREATE TABLE IF NOT EXISTS StageChecks (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                StudentId INTEGER NOT NULL,
+                TrainingOrderId INTEGER NOT NULL,
+                CurriculumVersionId INTEGER NOT NULL,
+                StageCode TEXT NOT NULL,
+                ExaminerUserId INTEGER,
+                ExaminerName TEXT NOT NULL,
+                AttemptNumber INTEGER NOT NULL DEFAULT 1,
+                Result TEXT NOT NULL DEFAULT 'Pending',
+                Deficiencies TEXT,
+                RemedialReference TEXT,
+                AssessedAt TEXT NOT NULL,
+                TrainingSessionId INTEGER,
+                ApprovalRecordId INTEGER,
+                RegulatoryReviewStatus TEXT NOT NULL DEFAULT 'NeedsRegulatoryReview',
+                RegulatoryDocumentId INTEGER,
+                RegulatoryRevision TEXT,
+                CreatedByUserId INTEGER,
+                FOREIGN KEY (StudentId) REFERENCES Students(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (TrainingOrderId) REFERENCES TrainingOrders(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (CurriculumVersionId) REFERENCES CurriculumVersions(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (ExaminerUserId) REFERENCES Users(Id) ON DELETE SET NULL,
+                FOREIGN KEY (TrainingSessionId) REFERENCES TrainingSessions(Id) ON DELETE SET NULL,
+                FOREIGN KEY (ApprovalRecordId) REFERENCES ApprovalRecords(Id) ON DELETE RESTRICT,
+                FOREIGN KEY (RegulatoryDocumentId) REFERENCES RegulatoryDocuments(Id) ON DELETE RESTRICT
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_stage_checks_student ON StageChecks(StudentId, TrainingOrderId, StageCode, AttemptNumber);
+
+            CREATE TRIGGER IF NOT EXISTS trg_stage_checks_no_update
+            BEFORE UPDATE ON StageChecks
+            BEGIN
+                SELECT RAISE(ABORT, 'Stage check attempts are append-only evidence; record a new attempt instead.');
+            END;
+
+            CREATE TRIGGER IF NOT EXISTS trg_stage_checks_no_delete
+            BEFORE DELETE ON StageChecks
+            BEGIN
+                SELECT RAISE(ABORT, 'Stage check attempts are append-only examination evidence.');
+            END;
         ";
         await cmd.ExecuteNonQueryAsync();
 
-        // Non-destructive column auto-migrations for existing databases
-        try
+        // Non-destructive column migrations share the schema transaction so failures roll back cleanly.
+        using (var versionCmd = connection.CreateCommand())
         {
+            versionCmd.Transaction = migration;
+            versionCmd.CommandText = "PRAGMA user_version;";
+            int existingSchemaVersion = Convert.ToInt32(await versionCmd.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            if (existingSchemaVersion > CurrentSchemaVersion)
+                throw new InvalidOperationException($"Database schema version {existingSchemaVersion} is newer than this application supports ({CurrentSchemaVersion}).");
+        }
+
             using var pragmaCmd = connection.CreateCommand();
+            pragmaCmd.Transaction = migration;
             pragmaCmd.CommandText = "PRAGMA table_info(Students);";
             var studentCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             using (var r = await pragmaCmd.ExecuteReaderAsync())
@@ -244,19 +861,36 @@ public class DatabaseService
             if (!studentCols.Contains("IsInternational"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE Students ADD COLUMN IsInternational INTEGER NOT NULL DEFAULT 0;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!studentCols.Contains("IsArchived"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE Students ADD COLUMN IsArchived INTEGER NOT NULL DEFAULT 0;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!studentCols.Contains("ArchivedAt"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE Students ADD COLUMN ArchivedAt TEXT;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+
+            pragmaCmd.CommandText = "PRAGMA table_info(Users);";
+            var userCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var r = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync()) userCols.Add(r.GetString(1));
+            }
+            if (!userCols.Contains("StudentId"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE Users ADD COLUMN StudentId INTEGER;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
 
@@ -269,48 +903,105 @@ public class DatabaseService
             if (!orderCols.Contains("AcademicYear"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN AcademicYear INTEGER NOT NULL DEFAULT 2026;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!orderCols.Contains("RegulatoryTrack"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN RegulatoryTrack TEXT NOT NULL DEFAULT 'Part61';";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!orderCols.Contains("BatchId"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN BatchId TEXT;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!orderCols.Contains("SyllabusHours"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN SyllabusHours REAL NOT NULL DEFAULT 0;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!orderCols.Contains("TrainingOrderAttachments"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN TrainingOrderAttachments TEXT;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!orderCols.Contains("IsArchived"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN IsArchived INTEGER NOT NULL DEFAULT 0;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
             if (!orderCols.Contains("ArchivedAt"))
             {
                 using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
                 alterCmd.CommandText = "ALTER TABLE TrainingOrders ADD COLUMN ArchivedAt TEXT;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+
+            pragmaCmd.CommandText = "PRAGMA table_info(AuditEvents);";
+            var auditCols = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var r = await pragmaCmd.ExecuteReaderAsync())
+            {
+                while (await r.ReadAsync()) auditCols.Add(r.GetString(1));
+            }
+            if (!auditCols.Contains("UserId"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE AuditEvents ADD COLUMN UserId INTEGER;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!auditCols.Contains("SessionId"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE AuditEvents ADD COLUMN SessionId TEXT;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!auditCols.Contains("LocationId"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE AuditEvents ADD COLUMN LocationId INTEGER;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!auditCols.Contains("VersionNo"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE AuditEvents ADD COLUMN VersionNo INTEGER NOT NULL DEFAULT 1;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!auditCols.Contains("BeforeJson"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE AuditEvents ADD COLUMN BeforeJson TEXT;";
+                await alterCmd.ExecuteNonQueryAsync();
+            }
+            if (!auditCols.Contains("AfterJson"))
+            {
+                using var alterCmd = connection.CreateCommand();
+                alterCmd.Transaction = migration;
+                alterCmd.CommandText = "ALTER TABLE AuditEvents ADD COLUMN AfterJson TEXT;";
                 await alterCmd.ExecuteNonQueryAsync();
             }
 
             // Decouple legacy airline/ETP data that was misclassified as Part141
             using var decoupleCmd = connection.CreateCommand();
+            decoupleCmd.Transaction = migration;
             decoupleCmd.CommandText = @"
                 UPDATE TrainingOrders 
                 SET RegulatoryTrack = 'ETP' 
@@ -318,11 +1009,20 @@ public class DatabaseService
                   AND (ProgramType LIKE '%خط جوي%' OR ProgramType LIKE '%ATP%' OR RegulationCategory LIKE '%خط جوي%' OR Notes LIKE '%خط جوي%');
             ";
             await decoupleCmd.ExecuteNonQueryAsync();
-        }
-        catch
-        {
-            // Ignore migration exceptions if columns already exist
-        }
+
+            using var indexCmd = connection.CreateCommand();
+            indexCmd.Transaction = migration;
+            indexCmd.CommandText = @"
+                CREATE INDEX IF NOT EXISTS idx_orders_year ON TrainingOrders(AcademicYear);
+                CREATE INDEX IF NOT EXISTS idx_orders_track ON TrainingOrders(RegulatoryTrack);
+            ";
+            await indexCmd.ExecuteNonQueryAsync();
+
+            using var setVersionCmd = connection.CreateCommand();
+            setVersionCmd.Transaction = migration;
+            setVersionCmd.CommandText = $"PRAGMA user_version = {CurrentSchemaVersion};";
+            await setVersionCmd.ExecuteNonQueryAsync();
+            migration.Commit();
     }
 
     /// <summary>
@@ -362,7 +1062,7 @@ public class DatabaseService
                     updateCmd.CommandText = "UPDATE Students SET Nationality = @nat, IsInternational = 1 WHERE Id = @id;";
                     updateCmd.Parameters.AddWithValue("@nat", cleanNat);
                     updateCmd.Parameters.AddWithValue("@id", studentId);
-                    await updateCmd.ExecuteNonQueryAsync();
+                    await ExecuteWriteNonQueryAsync(updateCmd, "Student.UpdateNationality", "Student", studentId.ToString(CultureInfo.InvariantCulture));
                 }
 
                 return studentId;
@@ -385,7 +1085,7 @@ public class DatabaseService
             insertCmd.Parameters.AddWithValue("@phone", (object?)phone ?? DBNull.Value);
             insertCmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
 
-            var result = await insertCmd.ExecuteScalarAsync();
+            var result = await ExecuteWriteScalarAsync(insertCmd, "Student.Create", "Student");
             return Convert.ToInt32(result);
         }
     }
@@ -493,12 +1193,12 @@ public class DatabaseService
 
         if (existingId > 0)
         {
-            await cmd.ExecuteNonQueryAsync();
+            await ExecuteWriteNonQueryAsync(cmd, "TrainingOrder.Update", "TrainingOrder", existingId.ToString(CultureInfo.InvariantCulture));
             return existingId;
         }
         else
         {
-            var newId = await cmd.ExecuteScalarAsync();
+            var newId = await ExecuteWriteScalarAsync(cmd, "TrainingOrder.Create", "TrainingOrder", $"StudentId:{order.StudentId}");
             return Convert.ToInt32(newId);
         }
     }
@@ -524,6 +1224,7 @@ public class DatabaseService
     /// </summary>
     public async Task<List<Student>> GetAllStudentsAsync(string? searchQuery = null, string? statusFilter = null, int? academicYear = null, bool? internationalOnly = null)
     {
+        await RequirePermissionAsync("students", PermissionLevel.ReadOnly);
         var students = new List<Student>();
 
         using var connection = new SqliteConnection(_connectionString);
@@ -637,6 +1338,7 @@ public class DatabaseService
     /// </summary>
     public async Task<Student?> GetStudentWithTrajectoryAsync(int studentId)
     {
+        await RequirePermissionAsync("students", PermissionLevel.ReadOnly);
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
 
@@ -728,6 +1430,7 @@ public class DatabaseService
         string? regulatoryTrackFilter = null,
         bool? internationalOnly = null)
     {
+        await RequirePermissionAsync("training-orders", PermissionLevel.ReadOnly);
         var list = new List<TrainingOrder>();
 
         using var connection = new SqliteConnection(_connectionString);
@@ -834,10 +1537,12 @@ public class DatabaseService
     {
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
 
         string status = completionDate.HasValue ? "منتهي" : "قيد التدريب";
 
         using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
         cmd.CommandText = @"
             UPDATE TrainingOrders 
             SET CompletionDate = @comp, Status = @status
@@ -847,7 +1552,18 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@comp", completionDate.HasValue ? completionDate.Value.ToString("yyyy-MM-dd") : (object)DBNull.Value);
         cmd.Parameters.AddWithValue("@status", status);
 
-        await cmd.ExecuteNonQueryAsync();
+        try
+        {
+            if (_identityService != null)
+                await _identityService.ConsumeApprovalAsync(connection, transaction, "TrainingOrder", orderId, "SetCompletionDate");
+            await ExecuteWriteNonQueryAsync(cmd, "TrainingOrder.SetCompletionDate", "TrainingOrder", orderId.ToString(CultureInfo.InvariantCulture));
+            await transaction.CommitAsync();
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -859,6 +1575,7 @@ public class DatabaseService
     /// </summary>
     public async Task<DashboardMetrics> GetDashboardMetricsAsync(int? targetYear = null)
     {
+        await RequirePermissionAsync("dashboard", PermissionLevel.ReadOnly);
         var metrics = new DashboardMetrics();
 
         using var connection = new SqliteConnection(_connectionString);
@@ -1086,6 +1803,7 @@ public class DatabaseService
     /// </summary>
     public async Task<TraineeMetricSummary> GetDemographicsSummaryAsync(int? targetYear = null)
     {
+        await RequirePermissionAsync("dashboard", PermissionLevel.ReadOnly);
         var allStudents = await GetAllStudentsAsync(null, null, targetYear);
         var allOrders = await GetAllOrdersAsync(targetYear);
         return DemographicsEngine.ComputeMetrics(allStudents, allOrders, targetYear);
@@ -1136,7 +1854,7 @@ public class DatabaseService
             cmd.CommandText = "UPDATE TrainingOrders SET StudentId = @target WHERE StudentId = @source;";
             cmd.Parameters.AddWithValue("@target", targetStudentId);
             cmd.Parameters.AddWithValue("@source", sourceStudentId);
-            await cmd.ExecuteNonQueryAsync();
+            await ExecuteWriteNonQueryAsync(cmd, "Student.MergeOrders", "Student", $"Target:{targetStudentId};Source:{sourceStudentId}");
         }
 
         // 2. Delete source student
@@ -1145,31 +1863,24 @@ public class DatabaseService
             cmd.Transaction = transaction;
             cmd.CommandText = "DELETE FROM Students WHERE Id = @source;";
             cmd.Parameters.AddWithValue("@source", sourceStudentId);
-            await cmd.ExecuteNonQueryAsync();
+            await ExecuteWriteNonQueryAsync(cmd, "Student.MergeDeleteSource", "Student", sourceStudentId.ToString(CultureInfo.InvariantCulture));
         }
 
         await transaction.CommitAsync();
     }
 
-    public async Task ClearAllDataAsync()
+    internal async Task ClearAllDataAsync()
     {
-        using var connection = new SqliteConnection(_connectionString);
-        await connection.OpenAsync();
+        if (!_allowDestructiveTestReset)
+            throw new UnauthorizedAccessException("Destructive database reset is restricted to isolated test databases.");
 
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"
-            DELETE FROM AuditEvents;
-            DELETE FROM PersonnelRecords;
-            DELETE FROM TrainingAssessments;
-            DELETE FROM FlightRecords;
-            DELETE FROM ComplianceRecords;
-            DELETE FROM TrainingSessions;
-            DELETE FROM AircraftResources;
-            DELETE FROM TrainingOrders;
-            DELETE FROM Students;
-            VACUUM;
-        ";
-        await cmd.ExecuteNonQueryAsync();
+        SqliteConnection.ClearAllPools();
+        foreach (string databaseArtifact in new[] { _dbPath + "-wal", _dbPath + "-shm", _dbPath })
+        {
+            if (File.Exists(databaseArtifact))
+                File.Delete(databaseArtifact);
+        }
+        await InitializeAsync();
     }
 
     /// <summary>
@@ -1177,6 +1888,7 @@ public class DatabaseService
     /// </summary>
     public async Task<List<TrainingSession>> GetTrainingSessionsAsync(DateTime date)
     {
+        await RequirePermissionAsync("schedule", PermissionLevel.ReadOnly);
         var sessions = new List<TrainingSession>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
@@ -1216,6 +1928,218 @@ public class DatabaseService
         return sessions;
     }
 
+    public async Task<FlightOperationsMetrics> GetFlightOperationsMetricsAsync(DateTime from, DateTime to)
+    {
+        if (to <= from) throw new ArgumentException("The metrics end date must be later than the start date.", nameof(to));
+        await RequirePermissionAsync("schedule", PermissionLevel.ReadOnly);
+        var metrics = new FlightOperationsMetrics();
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        string fromValue = from.ToString("o", CultureInfo.InvariantCulture);
+        string toValue = to.ToString("o", CultureInfo.InvariantCulture);
+
+        using (var statusCommand = connection.CreateCommand())
+        {
+            statusCommand.CommandText = @"
+                SELECT Status, COUNT(*) FROM TrainingSessions
+                WHERE StartAt >= @from AND StartAt < @to
+                GROUP BY Status;
+            ";
+            statusCommand.Parameters.AddWithValue("@from", fromValue);
+            statusCommand.Parameters.AddWithValue("@to", toValue);
+            using var reader = await statusCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                int count = reader.GetInt32(1);
+                switch (reader.GetString(0))
+                {
+                    case "Scheduled": metrics.Scheduled = count; break;
+                    case "Confirmed": metrics.Confirmed = count; break;
+                    case "Released":
+                    case "Dispatched": metrics.Released = count; break;
+                    case "Airborne": metrics.Airborne = count; break;
+                    case "Landed": metrics.Landed = count; break;
+                    case "Completed": metrics.Completed = count; break;
+                    case "Cancelled": metrics.Cancelled = count; break;
+                    case "NoShow": metrics.NoShow = count; break;
+                }
+            }
+        }
+
+        using (var utilizationCommand = connection.CreateCommand())
+        {
+            utilizationCommand.CommandText = @"
+                SELECT ResourceName, SUM(MAX(0, (julianday(EndAt) - julianday(StartAt)) * 24.0))
+                FROM FlightRecords
+                WHERE StartAt >= @from AND StartAt < @to AND ResourceName IS NOT NULL AND ResourceName <> ''
+                GROUP BY ResourceName;
+            ";
+            utilizationCommand.Parameters.AddWithValue("@from", fromValue);
+            utilizationCommand.Parameters.AddWithValue("@to", toValue);
+            using var reader = await utilizationCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                string resource = reader.GetString(0);
+                double hours = reader.IsDBNull(1) ? 0 : reader.GetDouble(1);
+                metrics.HoursByResource[resource] = Math.Round(hours, 2);
+                metrics.CompletedFlightHours += hours;
+            }
+        }
+        metrics.CompletedFlightHours = Math.Round(metrics.CompletedFlightHours, 2);
+
+        using (var reasonCommand = connection.CreateCommand())
+        {
+            reasonCommand.CommandText = @"
+                SELECT Outcome, Reason FROM SessionExceptions
+                WHERE RecordedAt >= @from AND RecordedAt < @to
+                ORDER BY RecordedAt DESC;
+            ";
+            reasonCommand.Parameters.AddWithValue("@from", fromValue);
+            reasonCommand.Parameters.AddWithValue("@to", toValue);
+            using var reader = await reasonCommand.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                metrics.CancellationReasons.Add($"{reader.GetString(0)}: {reader.GetString(1)}");
+        }
+        return metrics;
+    }
+
+    public async Task<int> SaveAvailabilityWindowAsync(AvailabilityWindow window)
+    {
+        if (window.EndAt <= window.StartAt)
+            throw new ArgumentException("Availability window end must be later than its start.", nameof(window));
+        if (string.IsNullOrWhiteSpace(window.ResourceType) || string.IsNullOrWhiteSpace(window.ResourceName))
+            throw new ArgumentException("Resource type and name are required.", nameof(window));
+        if (window.AvailabilityState is not ("Available" or "Unavailable"))
+            throw new ArgumentException("Availability state must be Available or Unavailable.", nameof(window));
+        if (string.IsNullOrWhiteSpace(window.Reason) || window.Reason.Trim().Length < 5)
+            throw new ArgumentException("A reason of at least five characters is required.", nameof(window));
+
+        bool resourceWindow = window.ResourceType is "Resource" or "Aircraft" or "Simulator";
+        await RequirePermissionAsync(resourceWindow ? "resources" : "schedule", PermissionLevel.FullEdit);
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        UserSession? actor = _identityService?.CurrentSession;
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            INSERT INTO AvailabilityWindows
+                (ResourceType, ResourceName, StartAt, EndAt, AvailabilityState, Reason, Location, CreatedByUserId, SessionId, LocationId, CreatedAt, IsArchived)
+            VALUES
+                (@resourceType, @resourceName, @startAt, @endAt, @state, @reason, @location, @userId, @sessionId, @locationId, @createdAt, 0);
+            SELECT last_insert_rowid();
+        ";
+        command.Parameters.AddWithValue("@resourceType", window.ResourceType.Trim());
+        command.Parameters.AddWithValue("@resourceName", window.ResourceName.Trim());
+        command.Parameters.AddWithValue("@startAt", window.StartAt.ToString("o", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("@endAt", window.EndAt.ToString("o", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("@state", window.AvailabilityState);
+        command.Parameters.AddWithValue("@reason", window.Reason.Trim());
+        command.Parameters.AddWithValue("@location", window.Location.Trim());
+        command.Parameters.AddWithValue("@userId", actor != null ? (object)actor.UserId : DBNull.Value);
+        command.Parameters.AddWithValue("@sessionId", (object?)actor?.SessionId ?? DBNull.Value);
+        command.Parameters.AddWithValue("@locationId", actor?.LocationId.HasValue == true ? actor.LocationId.Value : DBNull.Value);
+        command.Parameters.AddWithValue("@createdAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        string operation = resourceWindow ? "AvailabilityWindow.CreateResource" : "AvailabilityWindow.CreateSchedule";
+        return Convert.ToInt32(await ExecuteWriteScalarAsync(command, operation, "AvailabilityWindow", window.ResourceName.Trim()), CultureInfo.InvariantCulture);
+    }
+
+    public async Task<bool> ArchiveAvailabilityWindowAsync(int windowId)
+    {
+        if (windowId <= 0) return false;
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        string? resourceType;
+        using (var lookup = connection.CreateCommand())
+        {
+            lookup.CommandText = "SELECT ResourceType FROM AvailabilityWindows WHERE Id = @id AND IsArchived = 0;";
+            lookup.Parameters.AddWithValue("@id", windowId);
+            resourceType = Convert.ToString(await lookup.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+        }
+        if (resourceType == null) return false;
+        bool resourceWindow = resourceType is "Resource" or "Aircraft" or "Simulator";
+        await RequirePermissionAsync(resourceWindow ? "resources" : "schedule", PermissionLevel.FullEdit);
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE AvailabilityWindows SET IsArchived = 1, ArchivedAt = @archivedAt WHERE Id = @id AND IsArchived = 0;";
+        command.Parameters.AddWithValue("@archivedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("@id", windowId);
+        string operation = resourceWindow ? "AvailabilityWindow.ArchiveResource" : "AvailabilityWindow.ArchiveSchedule";
+        return await ExecuteWriteNonQueryAsync(command, operation, "AvailabilityWindow", windowId.ToString(CultureInfo.InvariantCulture)) > 0;
+    }
+
+    public async Task<List<AvailabilityWindow>> GetAvailabilityWindowsAsync(DateTime date)
+    {
+        await RequirePermissionAsync("schedule", PermissionLevel.ReadOnly);
+        var windows = new List<AvailabilityWindow>();
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT Id, ResourceType, ResourceName, StartAt, EndAt, AvailabilityState, Reason, Location,
+                   CreatedByUserId, SessionId, LocationId, CreatedAt, IsArchived, ArchivedAt
+            FROM AvailabilityWindows
+            WHERE IsArchived = 0 AND StartAt < @endAt AND EndAt > @startAt
+            ORDER BY StartAt, ResourceType, ResourceName;
+        ";
+        command.Parameters.AddWithValue("@startAt", date.Date.ToString("o", CultureInfo.InvariantCulture));
+        command.Parameters.AddWithValue("@endAt", date.Date.AddDays(1).ToString("o", CultureInfo.InvariantCulture));
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            windows.Add(new AvailabilityWindow
+            {
+                Id = reader.GetInt32(0), ResourceType = reader.GetString(1), ResourceName = reader.GetString(2),
+                StartAt = DateTime.Parse(reader.GetString(3), CultureInfo.InvariantCulture), EndAt = DateTime.Parse(reader.GetString(4), CultureInfo.InvariantCulture),
+                AvailabilityState = reader.GetString(5), Reason = reader.GetString(6), Location = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                CreatedByUserId = reader.IsDBNull(8) ? null : reader.GetInt32(8), SessionId = reader.IsDBNull(9) ? null : reader.GetString(9),
+                LocationId = reader.IsDBNull(10) ? null : reader.GetInt32(10), CreatedAt = DateTime.Parse(reader.GetString(11), CultureInfo.InvariantCulture),
+                IsArchived = reader.GetInt32(12) == 1, ArchivedAt = reader.IsDBNull(13) ? null : DateTime.Parse(reader.GetString(13), CultureInfo.InvariantCulture)
+            });
+        }
+        return windows;
+    }
+
+    private static async Task EnsureResourceAvailableAsync(SqliteConnection connection, string resourceType, string resourceName, DateTime startAt, DateTime endAt)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName)) return;
+        using var blockedCommand = connection.CreateCommand();
+        blockedCommand.CommandText = @"
+            SELECT COUNT(*) FROM AvailabilityWindows
+            WHERE ResourceType = @type COLLATE NOCASE AND ResourceName = @name COLLATE NOCASE
+              AND IsArchived = 0 AND AvailabilityState = 'Unavailable'
+              AND StartAt < @endAt AND EndAt > @startAt;
+        ";
+        blockedCommand.Parameters.AddWithValue("@type", resourceType);
+        blockedCommand.Parameters.AddWithValue("@name", resourceName.Trim());
+        blockedCommand.Parameters.AddWithValue("@startAt", startAt.ToString("o", CultureInfo.InvariantCulture));
+        blockedCommand.Parameters.AddWithValue("@endAt", endAt.ToString("o", CultureInfo.InvariantCulture));
+        if (Convert.ToInt32(await blockedCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture) > 0)
+            throw new InvalidOperationException($"{resourceType} '{resourceName}' is unavailable during the requested time window.");
+
+        using var availableCountCommand = connection.CreateCommand();
+        availableCountCommand.CommandText = @"
+            SELECT COUNT(*) FROM AvailabilityWindows
+            WHERE ResourceType = @type COLLATE NOCASE AND ResourceName = @name COLLATE NOCASE
+              AND IsArchived = 0 AND AvailabilityState = 'Available';
+        ";
+        availableCountCommand.Parameters.AddWithValue("@type", resourceType);
+        availableCountCommand.Parameters.AddWithValue("@name", resourceName.Trim());
+        int availableWindows = Convert.ToInt32(await availableCountCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+        if (availableWindows == 0) return;
+
+        using var matchingCommand = connection.CreateCommand();
+        matchingCommand.CommandText = @"
+            SELECT COUNT(*) FROM AvailabilityWindows
+            WHERE ResourceType = @type COLLATE NOCASE AND ResourceName = @name COLLATE NOCASE
+              AND IsArchived = 0 AND AvailabilityState = 'Available'
+              AND StartAt <= @startAt AND EndAt >= @endAt;
+        ";
+        matchingCommand.Parameters.AddWithValue("@type", resourceType);
+        matchingCommand.Parameters.AddWithValue("@name", resourceName.Trim());
+        matchingCommand.Parameters.AddWithValue("@startAt", startAt.ToString("o", CultureInfo.InvariantCulture));
+        matchingCommand.Parameters.AddWithValue("@endAt", endAt.ToString("o", CultureInfo.InvariantCulture));
+        if (Convert.ToInt32(await matchingCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 0)
+            throw new InvalidOperationException($"{resourceType} '{resourceName}' has no available window covering the requested time.");
+    }
+
     /// <summary>
     /// Schedules a training activity and refuses overlapping student, instructor, or resource allocations.
     /// </summary>
@@ -1224,6 +2148,8 @@ public class DatabaseService
         if (session.StudentId <= 0) throw new ArgumentException("A student is required for scheduling.", nameof(session));
         if (string.IsNullOrWhiteSpace(session.LessonTitle)) throw new ArgumentException("A lesson title is required.", nameof(session));
         if (session.EndAt <= session.StartAt) throw new ArgumentException("The session end time must be after its start time.", nameof(session));
+        if (!string.IsNullOrWhiteSpace(session.Status) && !string.Equals(session.Status, "Scheduled", StringComparison.Ordinal))
+            throw new ArgumentException("New training sessions must begin in the Scheduled state.", nameof(session));
         if (await HasExpiredVerifiedComplianceAsync(session.StudentId))
             throw new InvalidOperationException("The trainee has an expired verified compliance record and cannot be scheduled.");
         if (!await IsResourceDispatchableAsync(session.ResourceName))
@@ -1231,6 +2157,12 @@ public class DatabaseService
 
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
+
+        await EnsureResourceAvailableAsync(connection, "Student", session.StudentId.ToString(CultureInfo.InvariantCulture), session.StartAt, session.EndAt);
+        await EnsureResourceAvailableAsync(connection, "Instructor", session.InstructorName, session.StartAt, session.EndAt);
+        await EnsureResourceAvailableAsync(connection, "Resource", session.ResourceName, session.StartAt, session.EndAt);
+        await EnsureResourceAvailableAsync(connection, "Room", session.Location, session.StartAt, session.EndAt);
+        await EnsureResourceAvailableAsync(connection, "Weather", session.Location, session.StartAt, session.EndAt);
 
         using (var conflictCmd = connection.CreateCommand())
         {
@@ -1278,11 +2210,10 @@ public class DatabaseService
         insertCmd.Parameters.AddWithValue("@location", session.Location.Trim());
         insertCmd.Parameters.AddWithValue("@start", session.StartAt.ToString("o"));
         insertCmd.Parameters.AddWithValue("@end", session.EndAt.ToString("o"));
-        insertCmd.Parameters.AddWithValue("@status", string.IsNullOrWhiteSpace(session.Status) ? "Scheduled" : session.Status);
+        insertCmd.Parameters.AddWithValue("@status", "Scheduled");
         insertCmd.Parameters.AddWithValue("@notes", session.Notes.Trim());
         insertCmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
-        int sessionId = Convert.ToInt32(await insertCmd.ExecuteScalarAsync());
-        await RecordAuditEventAsync("TrainingSession", sessionId, "Created", $"Scheduled {session.LessonTitle.Trim()} for student #{session.StudentId}.");
+        int sessionId = Convert.ToInt32(await ExecuteWriteScalarAsync(insertCmd, "TrainingSession.Schedule", "TrainingSession", $"StudentId:{session.StudentId}"));
         return sessionId;
     }
 
@@ -1291,14 +2222,285 @@ public class DatabaseService
         if (sessionId <= 0) return false;
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
-        using var cmd = connection.CreateCommand();
-        cmd.CommandText = "UPDATE TrainingSessions SET Status = @status WHERE Id = @id;";
-        cmd.Parameters.AddWithValue("@status", status);
-        cmd.Parameters.AddWithValue("@id", sessionId);
-        bool updated = await cmd.ExecuteNonQueryAsync() > 0;
-        if (updated)
-            await RecordAuditEventAsync("TrainingSession", sessionId, "StatusChanged", $"Session status changed to {status}");
-        return updated;
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            string? currentStatus;
+            using (var stateCommand = connection.CreateCommand())
+            {
+                stateCommand.Transaction = transaction;
+                stateCommand.CommandText = "SELECT Status FROM TrainingSessions WHERE Id = @id;";
+                stateCommand.Parameters.AddWithValue("@id", sessionId);
+                currentStatus = Convert.ToString(await stateCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            }
+            if (currentStatus == null)
+            {
+                transaction.Commit();
+                return false;
+            }
+            if (!IsAllowedSessionTransition(currentStatus, status))
+                throw new InvalidOperationException($"Training session transition '{currentStatus}' → '{status}' is not allowed.");
+
+            using var cmd = connection.CreateCommand();
+            cmd.Transaction = transaction;
+            cmd.CommandText = "UPDATE TrainingSessions SET Status = @status WHERE Id = @id;";
+            cmd.Parameters.AddWithValue("@status", status);
+            cmd.Parameters.AddWithValue("@id", sessionId);
+            bool updated = await ExecuteWriteNonQueryAsync(cmd, "TrainingSession.ChangeStatus", "TrainingSession", sessionId.ToString(CultureInfo.InvariantCulture)) > 0;
+            await transaction.CommitAsync();
+            return updated;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    private static bool IsAllowedSessionTransition(string current, string next) => (current, next) switch
+    {
+        ("Scheduled", "Confirmed") => true,
+        ("Released" or "Dispatched", "Airborne") => true,
+        ("Airborne", "Landed") => true,
+        _ => false
+    };
+
+    public async Task<bool> RescheduleTrainingSessionAsync(int sessionId, DateTime startAt, DateTime endAt, string instructorName, string resourceName, string location, string reason)
+    {
+        if (sessionId <= 0) throw new ArgumentOutOfRangeException(nameof(sessionId));
+        if (endAt <= startAt) throw new ArgumentException("The new end time must be after the start time.", nameof(endAt));
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 5)
+            throw new ArgumentException("A reschedule reason of at least five characters is required.", nameof(reason));
+
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            int studentId;
+            string? status;
+            using (var currentCommand = connection.CreateCommand())
+            {
+                currentCommand.Transaction = transaction;
+                currentCommand.CommandText = "SELECT StudentId, Status FROM TrainingSessions WHERE Id = @id;";
+                currentCommand.Parameters.AddWithValue("@id", sessionId);
+                using var reader = await currentCommand.ExecuteReaderAsync();
+                if (!await reader.ReadAsync()) return false;
+                studentId = reader.GetInt32(0);
+                status = reader.GetString(1);
+            }
+            if (status is not ("Scheduled" or "Confirmed"))
+                throw new InvalidOperationException("Only scheduled or confirmed sessions can be rescheduled.");
+            if (await HasExpiredVerifiedComplianceAsync(studentId))
+                throw new InvalidOperationException("The trainee has an expired verified compliance record.");
+            if (!await IsResourceDispatchableAsync(resourceName))
+                throw new InvalidOperationException($"Resource '{resourceName}' is unavailable or maintenance-due.");
+
+            await EnsureResourceAvailableAsync(connection, "Student", studentId.ToString(CultureInfo.InvariantCulture), startAt, endAt);
+            await EnsureResourceAvailableAsync(connection, "Instructor", instructorName, startAt, endAt);
+            await EnsureResourceAvailableAsync(connection, "Resource", resourceName, startAt, endAt);
+            await EnsureResourceAvailableAsync(connection, "Room", location, startAt, endAt);
+            await EnsureResourceAvailableAsync(connection, "Weather", location, startAt, endAt);
+
+            using (var conflictCommand = connection.CreateCommand())
+            {
+                conflictCommand.Transaction = transaction;
+                conflictCommand.CommandText = @"
+                    SELECT COUNT(*) FROM TrainingSessions
+                    WHERE Id <> @id AND Status NOT IN ('Cancelled', 'NoShow', 'Completed')
+                      AND StartAt < @endAt AND EndAt > @startAt
+                      AND (StudentId = @studentId
+                           OR (@instructor <> '' AND InstructorName = @instructor)
+                           OR (@resource <> '' AND ResourceName = @resource)
+                           OR (@location <> '' AND Location = @location));
+                ";
+                conflictCommand.Parameters.AddWithValue("@id", sessionId);
+                conflictCommand.Parameters.AddWithValue("@startAt", startAt.ToString("o", CultureInfo.InvariantCulture));
+                conflictCommand.Parameters.AddWithValue("@endAt", endAt.ToString("o", CultureInfo.InvariantCulture));
+                conflictCommand.Parameters.AddWithValue("@studentId", studentId);
+                conflictCommand.Parameters.AddWithValue("@instructor", instructorName.Trim());
+                conflictCommand.Parameters.AddWithValue("@resource", resourceName.Trim());
+                conflictCommand.Parameters.AddWithValue("@location", location.Trim());
+                if (Convert.ToInt32(await conflictCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture) > 0)
+                    throw new InvalidOperationException("The new time conflicts with another student, instructor, resource, or room booking.");
+            }
+
+            using var updateCommand = connection.CreateCommand();
+            updateCommand.Transaction = transaction;
+            updateCommand.CommandText = @"
+                UPDATE TrainingSessions
+                SET StartAt = @startAt, EndAt = @endAt, InstructorName = @instructor,
+                    ResourceName = @resource, Location = @location,
+                    Notes = CASE WHEN Notes IS NULL OR Notes = '' THEN @reason ELSE Notes || ' | ' || @reason END
+                WHERE Id = @id;
+            ";
+            updateCommand.Parameters.AddWithValue("@startAt", startAt.ToString("o", CultureInfo.InvariantCulture));
+            updateCommand.Parameters.AddWithValue("@endAt", endAt.ToString("o", CultureInfo.InvariantCulture));
+            updateCommand.Parameters.AddWithValue("@instructor", instructorName.Trim());
+            updateCommand.Parameters.AddWithValue("@resource", resourceName.Trim());
+            updateCommand.Parameters.AddWithValue("@location", location.Trim());
+            updateCommand.Parameters.AddWithValue("@reason", $"Reschedule reason: {reason.Trim()}");
+            updateCommand.Parameters.AddWithValue("@id", sessionId);
+            bool updated = await ExecuteWriteNonQueryAsync(updateCommand, "TrainingSession.Reschedule", "TrainingSession", sessionId.ToString(CultureInfo.InvariantCulture)) > 0;
+            await transaction.CommitAsync();
+            return updated;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    internal async Task<int> ReleaseTrainingSessionAsync(int sessionId, string flightInformationFile, string weatherBriefing, string checklistJson, string reason)
+    {
+        if (sessionId <= 0) throw new ArgumentOutOfRangeException(nameof(sessionId));
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            string? currentStatus = null;
+            int traineeId = 0;
+            string resourceName = string.Empty;
+            string instructorName = string.Empty;
+            string sessionLocation = string.Empty;
+            DateTime scheduledStart = default;
+            DateTime scheduledEnd = default;
+            using (var stateCommand = connection.CreateCommand())
+            {
+                stateCommand.Transaction = transaction;
+                stateCommand.CommandText = "SELECT Status, StudentId, ResourceName, InstructorName, Location, StartAt, EndAt FROM TrainingSessions WHERE Id = @id;";
+                stateCommand.Parameters.AddWithValue("@id", sessionId);
+                using var reader = await stateCommand.ExecuteReaderAsync();
+                if (await reader.ReadAsync())
+                {
+                    currentStatus = reader.GetString(0);
+                    traineeId = reader.GetInt32(1);
+                    resourceName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                    instructorName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+                    sessionLocation = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
+                    scheduledStart = DateTime.Parse(reader.GetString(5), CultureInfo.InvariantCulture);
+                    scheduledEnd = DateTime.Parse(reader.GetString(6), CultureInfo.InvariantCulture);
+                }
+            }
+            if (!string.Equals(currentStatus, "Confirmed", StringComparison.Ordinal))
+                throw new InvalidOperationException("Only a confirmed booking can receive a dispatch release.");
+            if (await HasExpiredVerifiedComplianceAsync(traineeId))
+                throw new InvalidOperationException("The trainee has an expired verified compliance record and cannot be released.");
+            await EnsureResourceAvailableAsync(connection, "Student", traineeId.ToString(CultureInfo.InvariantCulture), scheduledStart, scheduledEnd);
+            await EnsureResourceAvailableAsync(connection, "Instructor", instructorName, scheduledStart, scheduledEnd);
+            await EnsureResourceAvailableAsync(connection, "Resource", resourceName, scheduledStart, scheduledEnd);
+            await EnsureResourceAvailableAsync(connection, "Room", sessionLocation, scheduledStart, scheduledEnd);
+            await EnsureResourceAvailableAsync(connection, "Weather", sessionLocation, scheduledStart, scheduledEnd);
+            if (!string.IsNullOrWhiteSpace(resourceName))
+            {
+                using var resourceCommand = connection.CreateCommand();
+                resourceCommand.Transaction = transaction;
+                resourceCommand.CommandText = "SELECT Status, HobbsHours, MaintenanceDueAtHours FROM AircraftResources WHERE Registration = @registration LIMIT 1;";
+                resourceCommand.Parameters.AddWithValue("@registration", resourceName);
+                using var resourceReader = await resourceCommand.ExecuteReaderAsync();
+                if (await resourceReader.ReadAsync())
+                {
+                    string status = resourceReader.IsDBNull(0) ? "Available" : resourceReader.GetString(0);
+                    double hobbs = resourceReader.IsDBNull(1) ? 0 : resourceReader.GetDouble(1);
+                    double? maintenanceDue = resourceReader.IsDBNull(2) ? null : resourceReader.GetDouble(2);
+                    if (status != "Available" || (maintenanceDue.HasValue && hobbs >= maintenanceDue.Value))
+                        throw new InvalidOperationException("The scheduled aircraft/resource is unavailable or maintenance-due.");
+                }
+            }
+
+            UserSession? actor = _identityService?.CurrentSession;
+            using var releaseCommand = connection.CreateCommand();
+            releaseCommand.Transaction = transaction;
+            releaseCommand.CommandText = @"
+                INSERT INTO DispatchReleases
+                    (TrainingSessionId, ReleaseReference, WeatherBriefing, FlightInformationFile, ChecklistJson, Reason, ReleasedByUserId, SessionId, LocationId, ReleasedAt)
+                VALUES
+                    (@sessionId, @reference, @weather, @file, @checklist, @reason, @userId, @authSessionId, @locationId, @releasedAt);
+                SELECT last_insert_rowid();
+            ";
+            releaseCommand.Parameters.AddWithValue("@sessionId", sessionId);
+            releaseCommand.Parameters.AddWithValue("@reference", $"REL-{sessionId}-{DateTime.UtcNow:yyyyMMddHHmmss}");
+            releaseCommand.Parameters.AddWithValue("@weather", weatherBriefing.Trim());
+            releaseCommand.Parameters.AddWithValue("@file", flightInformationFile.Trim());
+            releaseCommand.Parameters.AddWithValue("@checklist", checklistJson);
+            releaseCommand.Parameters.AddWithValue("@reason", reason.Trim());
+            releaseCommand.Parameters.AddWithValue("@userId", actor != null ? (object)actor.UserId : DBNull.Value);
+            releaseCommand.Parameters.AddWithValue("@authSessionId", (object?)actor?.SessionId ?? DBNull.Value);
+            releaseCommand.Parameters.AddWithValue("@locationId", actor?.LocationId.HasValue == true ? actor.LocationId.Value : DBNull.Value);
+            releaseCommand.Parameters.AddWithValue("@releasedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+            int releaseId = Convert.ToInt32(await ExecuteWriteScalarAsync(releaseCommand, "DispatchRelease.Create", "DispatchRelease", sessionId.ToString(CultureInfo.InvariantCulture)), CultureInfo.InvariantCulture);
+
+            using var statusCommand = connection.CreateCommand();
+            statusCommand.Transaction = transaction;
+            statusCommand.CommandText = "UPDATE TrainingSessions SET Status = 'Released' WHERE Id = @id AND Status = 'Confirmed';";
+            statusCommand.Parameters.AddWithValue("@id", sessionId);
+            await ExecuteWriteNonQueryAsync(statusCommand, "TrainingSession.Release", "TrainingSession", sessionId.ToString(CultureInfo.InvariantCulture));
+            await transaction.CommitAsync();
+            return releaseId;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
+    }
+
+    public async Task<bool> ResolveTrainingSessionAsync(int sessionId, string outcome, string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length < 5)
+            throw new ArgumentException("A reason of at least five characters is required.", nameof(reason));
+        if (outcome is not ("Cancelled" or "NoShow"))
+            throw new ArgumentException("Only cancellation and no-show outcomes are supported.", nameof(outcome));
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            string? currentStatus;
+            using (var stateCommand = connection.CreateCommand())
+            {
+                stateCommand.Transaction = transaction;
+                stateCommand.CommandText = "SELECT Status FROM TrainingSessions WHERE Id = @id;";
+                stateCommand.Parameters.AddWithValue("@id", sessionId);
+                currentStatus = Convert.ToString(await stateCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+            }
+            if (currentStatus == null) return false;
+            if (currentStatus is not ("Scheduled" or "Confirmed"))
+                throw new InvalidOperationException($"Training session transition '{currentStatus}' → '{outcome}' is not allowed.");
+
+            UserSession? actor = _identityService?.CurrentSession;
+            using var exceptionCommand = connection.CreateCommand();
+            exceptionCommand.Transaction = transaction;
+            exceptionCommand.CommandText = @"
+                INSERT INTO SessionExceptions (TrainingSessionId, Outcome, Reason, RecordedByUserId, SessionId, LocationId, RecordedAt)
+                VALUES (@sessionId, @outcome, @reason, @userId, @authSessionId, @locationId, @recordedAt);
+                SELECT last_insert_rowid();
+            ";
+            exceptionCommand.Parameters.AddWithValue("@sessionId", sessionId);
+            exceptionCommand.Parameters.AddWithValue("@outcome", outcome);
+            exceptionCommand.Parameters.AddWithValue("@reason", reason.Trim());
+            exceptionCommand.Parameters.AddWithValue("@userId", actor != null ? (object)actor.UserId : DBNull.Value);
+            exceptionCommand.Parameters.AddWithValue("@authSessionId", (object?)actor?.SessionId ?? DBNull.Value);
+            exceptionCommand.Parameters.AddWithValue("@locationId", actor?.LocationId.HasValue == true ? actor.LocationId.Value : DBNull.Value);
+            exceptionCommand.Parameters.AddWithValue("@recordedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+            int exceptionId = Convert.ToInt32(await ExecuteWriteScalarAsync(exceptionCommand, $"TrainingSession.{outcome}", "SessionException", sessionId.ToString(CultureInfo.InvariantCulture)), CultureInfo.InvariantCulture);
+
+            using var statusCommand = connection.CreateCommand();
+            statusCommand.Transaction = transaction;
+            statusCommand.CommandText = "UPDATE TrainingSessions SET Status = @status WHERE Id = @id;";
+            statusCommand.Parameters.AddWithValue("@status", outcome);
+            statusCommand.Parameters.AddWithValue("@id", sessionId);
+            await ExecuteWriteNonQueryAsync(statusCommand, "TrainingSession.ChangeStatus", "TrainingSession", sessionId.ToString(CultureInfo.InvariantCulture));
+            await transaction.CommitAsync();
+            return exceptionId > 0;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -1318,6 +2520,58 @@ public class DatabaseService
         int recordId;
         try
         {
+            if (record.TrainingSessionId.HasValue)
+            {
+                using var existingRecordCommand = connection.CreateCommand();
+                existingRecordCommand.Transaction = transaction;
+                existingRecordCommand.CommandText = @"
+                    SELECT Id, StudentId, ActivityType, ResourceName, InstructorName, Route, StartAt, EndAt,
+                           HobbsStart, HobbsEnd, Landings, Remarks
+                    FROM FlightRecords
+                    WHERE TrainingSessionId = @sessionId
+                    LIMIT 1;
+                ";
+                existingRecordCommand.Parameters.AddWithValue("@sessionId", record.TrainingSessionId.Value);
+                using (var existingReader = await existingRecordCommand.ExecuteReaderAsync())
+                {
+                    if (await existingReader.ReadAsync())
+                    {
+                        bool sameSubmission = existingReader.GetInt32(1) == record.StudentId
+                            && string.Equals(existingReader.GetString(2), string.IsNullOrWhiteSpace(record.ActivityType) ? "Dual" : record.ActivityType.Trim(), StringComparison.Ordinal)
+                            && string.Equals(existingReader.GetString(3), record.ResourceName.Trim(), StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(existingReader.GetString(4), record.InstructorName.Trim(), StringComparison.OrdinalIgnoreCase)
+                            && string.Equals(existingReader.GetString(5), record.Route.Trim(), StringComparison.Ordinal)
+                            && DateTime.Parse(existingReader.GetString(6), CultureInfo.InvariantCulture) == record.StartAt
+                            && DateTime.Parse(existingReader.GetString(7), CultureInfo.InvariantCulture) == record.EndAt
+                            && Math.Abs(existingReader.GetDouble(8) - record.HobbsStart) < 0.0001
+                            && Math.Abs(existingReader.GetDouble(9) - record.HobbsEnd) < 0.0001
+                            && existingReader.GetInt32(10) == record.Landings
+                            && string.Equals(existingReader.IsDBNull(11) ? string.Empty : existingReader.GetString(11), record.Remarks.Trim(), StringComparison.Ordinal);
+                        if (!sameSubmission)
+                            throw new InvalidOperationException("This training session already has a different completed flight record.");
+                        int existingRecordId = existingReader.GetInt32(0);
+                        await existingReader.DisposeAsync();
+                        await transaction.CommitAsync();
+                        return existingRecordId;
+                    }
+                }
+
+                using var operationalSessionCommand = connection.CreateCommand();
+                operationalSessionCommand.Transaction = transaction;
+                operationalSessionCommand.CommandText = "SELECT Status, StudentId, ResourceName FROM TrainingSessions WHERE Id = @id;";
+                operationalSessionCommand.Parameters.AddWithValue("@id", record.TrainingSessionId.Value);
+                using var sessionReader = await operationalSessionCommand.ExecuteReaderAsync();
+                if (!await sessionReader.ReadAsync())
+                    throw new InvalidOperationException("The linked scheduled session does not exist.");
+                if (!string.Equals(sessionReader.GetString(0), "Landed", StringComparison.Ordinal))
+                    throw new InvalidOperationException("A scheduled session must be marked landed before recording flight completion.");
+                if (sessionReader.GetInt32(1) != record.StudentId)
+                    throw new InvalidOperationException("Flight record trainee does not match the scheduled session.");
+                string scheduledResource = sessionReader.IsDBNull(2) ? string.Empty : sessionReader.GetString(2);
+                if (!string.IsNullOrWhiteSpace(scheduledResource) && !string.Equals(scheduledResource, record.ResourceName, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Flight record resource does not match the scheduled session.");
+            }
+
             using (var insertCmd = connection.CreateCommand())
             {
                 insertCmd.Transaction = transaction;
@@ -1341,7 +2595,7 @@ public class DatabaseService
                 insertCmd.Parameters.AddWithValue("@landings", record.Landings);
                 insertCmd.Parameters.AddWithValue("@remarks", record.Remarks.Trim());
                 insertCmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
-                recordId = Convert.ToInt32(await insertCmd.ExecuteScalarAsync());
+                recordId = Convert.ToInt32(await ExecuteWriteScalarAsync(insertCmd, "FlightRecord.Create", "FlightRecord", $"StudentId:{record.StudentId}"));
             }
 
             if (!string.IsNullOrWhiteSpace(record.ResourceName))
@@ -1355,7 +2609,7 @@ public class DatabaseService
                 ";
                 resourceCmd.Parameters.AddWithValue("@hobbsEnd", record.HobbsEnd);
                 resourceCmd.Parameters.AddWithValue("@registration", record.ResourceName.Trim());
-                await resourceCmd.ExecuteNonQueryAsync();
+                await ExecuteWriteNonQueryAsync(resourceCmd, "AircraftResource.AdvanceHobbs", "AircraftResource", record.ResourceName.Trim());
             }
 
             if (record.TrainingSessionId.HasValue)
@@ -1364,25 +2618,24 @@ public class DatabaseService
                 sessionCmd.Transaction = transaction;
                 sessionCmd.CommandText = "UPDATE TrainingSessions SET Status = 'Completed' WHERE Id = @id;";
                 sessionCmd.Parameters.AddWithValue("@id", record.TrainingSessionId.Value);
-                await sessionCmd.ExecuteNonQueryAsync();
+                await ExecuteWriteNonQueryAsync(sessionCmd, "TrainingSession.CompleteFromFlight", "TrainingSession", record.TrainingSessionId.Value.ToString(CultureInfo.InvariantCulture));
             }
 
             await transaction.CommitAsync();
         }
-        catch
+        catch (Exception ex)
         {
             await transaction.RollbackAsync();
+            AppLogService.LogException("FlightRecord.Transaction", ex, "FlightRecord", $"StudentId:{record.StudentId}");
             throw;
         }
 
-        await RecordAuditEventAsync("FlightRecord", recordId, "Created", $"Recorded {record.ActivityType} activity for student #{record.StudentId}.");
-        if (record.TrainingSessionId.HasValue)
-            await RecordAuditEventAsync("TrainingSession", record.TrainingSessionId.Value, "CompletedFromRecord", $"Completed from flight record #{recordId}.");
         return recordId;
     }
 
     public async Task<List<FlightRecord>> GetFlightRecordsAsync(DateTime? date = null, int? studentId = null)
     {
+        await RequirePermissionAsync("flight-records", PermissionLevel.ReadOnly);
         var records = new List<FlightRecord>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
@@ -1441,13 +2694,13 @@ public class DatabaseService
             SELECT last_insert_rowid();
         ";
         cmd.Parameters.AddWithValue("@studentId", assessment.StudentId); cmd.Parameters.AddWithValue("@type", assessment.AssessmentType.Trim()); cmd.Parameters.AddWithValue("@title", assessment.Title.Trim()); cmd.Parameters.AddWithValue("@examiner", assessment.ExaminerName.Trim()); cmd.Parameters.AddWithValue("@attempt", assessment.AttemptNumber); cmd.Parameters.AddWithValue("@result", assessment.Result); cmd.Parameters.AddWithValue("@deficiencies", assessment.Deficiencies.Trim()); cmd.Parameters.AddWithValue("@remedial", assessment.RemedialPlan.Trim()); cmd.Parameters.AddWithValue("@nextAction", assessment.NextAction.Trim()); cmd.Parameters.AddWithValue("@assessedAt", assessment.AssessedAt.ToString("o")); cmd.Parameters.AddWithValue("@createdAt", DateTime.Now.ToString("o"));
-        int id = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        await RecordAuditEventAsync("TrainingAssessment", id, "Created", $"Recorded {assessment.Result} assessment for student #{assessment.StudentId}.");
+        int id = Convert.ToInt32(await ExecuteWriteScalarAsync(cmd, "TrainingAssessment.Create", "TrainingAssessment", $"StudentId:{assessment.StudentId}"));
         return id;
     }
 
     public async Task<List<TrainingAssessment>> GetTrainingAssessmentsAsync(int? studentId = null)
     {
+        await RequirePermissionAsync("assessments", PermissionLevel.ReadOnly);
         var assessments = new List<TrainingAssessment>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(); using var cmd = connection.CreateCommand();
@@ -1464,51 +2717,68 @@ public class DatabaseService
         using var connection = new SqliteConnection(_connectionString); await connection.OpenAsync(); using var cmd = connection.CreateCommand();
         cmd.CommandText = @"INSERT INTO PersonnelRecords (FullName, Role, LicenseNumber, LicenseExpiresAt, IsActive, Notes, CreatedAt) VALUES (@name,@role,@license,@expires,@active,@notes,@created) ON CONFLICT(FullName) DO UPDATE SET Role=excluded.Role, LicenseNumber=excluded.LicenseNumber, LicenseExpiresAt=excluded.LicenseExpiresAt, IsActive=excluded.IsActive, Notes=excluded.Notes; SELECT Id FROM PersonnelRecords WHERE FullName=@name;";
         cmd.Parameters.AddWithValue("@name", person.FullName.Trim()); cmd.Parameters.AddWithValue("@role", person.Role.Trim()); cmd.Parameters.AddWithValue("@license", person.LicenseNumber.Trim()); cmd.Parameters.AddWithValue("@expires", person.LicenseExpiresAt.HasValue ? person.LicenseExpiresAt.Value.ToString("o") : DBNull.Value); cmd.Parameters.AddWithValue("@active", person.IsActive ? 1 : 0); cmd.Parameters.AddWithValue("@notes", person.Notes.Trim()); cmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
-        int id=Convert.ToInt32(await cmd.ExecuteScalarAsync()); await RecordAuditEventAsync("Personnel",id,"Saved",$"Saved {person.Role} {person.FullName.Trim()}."); return id;
+          int id=Convert.ToInt32(await ExecuteWriteScalarAsync(cmd,"Personnel.Save","PersonnelRecord",person.FullName.Trim())); return id;
     }
 
     public async Task<List<PersonnelRecord>> GetPersonnelAsync(bool currentOnly = false)
     {
+        await RequirePermissionAsync("personnel", PermissionLevel.ReadOnly);
         var people=new List<PersonnelRecord>(); using var connection=new SqliteConnection(_connectionString); await connection.OpenAsync(); using var cmd=connection.CreateCommand();
         cmd.CommandText=@"SELECT Id,FullName,Role,LicenseNumber,LicenseExpiresAt,IsActive,Notes FROM PersonnelRecords WHERE (@currentOnly=0 OR (IsActive=1 AND (LicenseExpiresAt IS NULL OR LicenseExpiresAt>=@today))) ORDER BY FullName;"; cmd.Parameters.AddWithValue("@currentOnly",currentOnly?1:0);cmd.Parameters.AddWithValue("@today",DateTime.Today.ToString("o")); using var r=await cmd.ExecuteReaderAsync();
         while(await r.ReadAsync()) people.Add(new PersonnelRecord{Id=r.GetInt32(0),FullName=r.GetString(1),Role=r.GetString(2),LicenseNumber=r.IsDBNull(3)?string.Empty:r.GetString(3),LicenseExpiresAt=r.IsDBNull(4)?null:DateTime.Parse(r.GetString(4),CultureInfo.InvariantCulture),IsActive=r.GetInt32(5)==1,Notes=r.IsDBNull(6)?string.Empty:r.GetString(6)}); return people;
     }
 
-    public async Task RecordAuditEventAsync(string entityType, int entityId, string action, string summary, string actor = "Local Operator")
+    internal async Task RecordAuditEventAsync(string entityType, int entityId, string action, string summary, string actor = "Local Operator")
     {
+        UserSession? session = _identityService?.CurrentSession;
+        string resolvedActor = actor == "Local Operator" && session != null ? session.UserName : actor;
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO AuditEvents (EntityType, EntityId, Action, Summary, Actor, OccurredAt)
-            VALUES (@entityType, @entityId, @action, @summary, @actor, @occurredAt);
+            INSERT INTO AuditEvents (EntityType, EntityId, Action, Summary, Actor, OccurredAt, UserId, SessionId, LocationId)
+            VALUES (@entityType, @entityId, @action, @summary, @actor, @occurredAt, @userId, @sessionId, @locationId);
         ";
         cmd.Parameters.AddWithValue("@entityType", entityType);
         cmd.Parameters.AddWithValue("@entityId", entityId);
         cmd.Parameters.AddWithValue("@action", action);
         cmd.Parameters.AddWithValue("@summary", summary);
-        cmd.Parameters.AddWithValue("@actor", actor);
-        cmd.Parameters.AddWithValue("@occurredAt", DateTime.Now.ToString("o"));
-        await cmd.ExecuteNonQueryAsync();
+        cmd.Parameters.AddWithValue("@actor", resolvedActor);
+        cmd.Parameters.AddWithValue("@occurredAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        cmd.Parameters.AddWithValue("@userId", session?.UserId ?? (object)DBNull.Value);
+        cmd.Parameters.AddWithValue("@sessionId", (object?)session?.SessionId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("@locationId", session?.LocationId ?? (object)DBNull.Value);
+        await ExecuteWriteNonQueryAsync(cmd, "AuditEvent.Create", "AuditEvent", $"{entityType}:{entityId}");
     }
 
-    public async Task<List<AuditEvent>> GetAuditEventsAsync(string? entityType = null, int? entityId = null, int limit = 200)
+    public async Task<List<AuditEvent>> GetAuditEventsAsync(string? entityType = null, int? entityId = null, int limit = 200, DateTime? from = null, DateTime? to = null, string? actor = null, string? action = null, int? userId = null)
     {
+        await RequirePermissionAsync("audit", PermissionLevel.ReadOnly);
         var events = new List<AuditEvent>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT Id, EntityType, EntityId, Action, Summary, Actor, OccurredAt
+            SELECT Id, EntityType, EntityId, Action, Summary, Actor, OccurredAt, UserId, SessionId, LocationId, VersionNo, BeforeJson, AfterJson
             FROM AuditEvents
             WHERE (@entityType IS NULL OR EntityType = @entityType)
               AND (@entityId IS NULL OR EntityId = @entityId)
-            ORDER BY OccurredAt DESC
+              AND (@action IS NULL OR Action = @action)
+              AND (@actor IS NULL OR Actor LIKE '%' || @actor || '%')
+              AND (@userId IS NULL OR UserId = @userId)
+              AND (@from IS NULL OR OccurredAt >= @from)
+              AND (@to IS NULL OR OccurredAt < @to)
+            ORDER BY OccurredAt DESC, Id DESC
             LIMIT @limit;
         ";
         cmd.Parameters.AddWithValue("@entityType", string.IsNullOrWhiteSpace(entityType) ? DBNull.Value : entityType);
         cmd.Parameters.AddWithValue("@entityId", entityId.HasValue ? entityId.Value : DBNull.Value);
-        cmd.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 1000));
+        cmd.Parameters.AddWithValue("@action", string.IsNullOrWhiteSpace(action) ? DBNull.Value : action.Trim());
+        cmd.Parameters.AddWithValue("@actor", string.IsNullOrWhiteSpace(actor) ? DBNull.Value : actor.Trim());
+        cmd.Parameters.AddWithValue("@userId", userId.HasValue ? userId.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("@from", from.HasValue ? from.Value.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) : DBNull.Value);
+        cmd.Parameters.AddWithValue("@to", to.HasValue ? to.Value.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture) : DBNull.Value);
+        cmd.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 100_000));
         using var reader = await cmd.ExecuteReaderAsync();
         while (await reader.ReadAsync())
         {
@@ -1520,7 +2790,13 @@ public class DatabaseService
                 Action = reader.GetString(3),
                 Summary = reader.GetString(4),
                 Actor = reader.GetString(5),
-                OccurredAt = DateTime.Parse(reader.GetString(6), CultureInfo.InvariantCulture)
+                OccurredAt = DateTime.Parse(reader.GetString(6), CultureInfo.InvariantCulture),
+                UserId = reader.IsDBNull(7) ? null : reader.GetInt32(7),
+                SessionId = reader.IsDBNull(8) ? null : reader.GetString(8),
+                LocationId = reader.IsDBNull(9) ? null : reader.GetInt32(9),
+                VersionNo = reader.GetInt32(10),
+                BeforeJson = reader.IsDBNull(11) ? null : reader.GetString(11),
+                AfterJson = reader.IsDBNull(12) ? null : reader.GetString(12)
             });
         }
         return events;
@@ -1528,6 +2804,7 @@ public class DatabaseService
 
     public async Task<List<ComplianceRecord>> GetComplianceRecordsAsync(DateTime? expiringBefore = null)
     {
+        await RequirePermissionAsync("compliance", PermissionLevel.ReadOnly);
         var records = new List<ComplianceRecord>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
@@ -1583,13 +2860,13 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@verified", record.IsVerified ? 1 : 0);
         cmd.Parameters.AddWithValue("@notes", record.Notes.Trim());
         cmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
-        int id = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        await RecordAuditEventAsync("ComplianceRecord", id, "Created", $"Added {record.RecordType} record for student #{record.StudentId}.");
+        int id = Convert.ToInt32(await ExecuteWriteScalarAsync(cmd, "ComplianceRecord.Create", "ComplianceRecord", $"StudentId:{record.StudentId}"));
         return id;
     }
 
     public async Task<bool> HasExpiredVerifiedComplianceAsync(int studentId)
     {
+        await RequirePermissionAsync("compliance", PermissionLevel.ReadOnly);
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         using var cmd = connection.CreateCommand();
@@ -1605,6 +2882,7 @@ public class DatabaseService
 
     public async Task<List<AircraftResource>> GetAircraftResourcesAsync()
     {
+        await RequirePermissionAsync("resources", PermissionLevel.ReadOnly);
         var resources = new List<AircraftResource>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
@@ -1672,14 +2950,14 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@due", resource.MaintenanceDueAtHours.HasValue ? resource.MaintenanceDueAtHours.Value : (object)DBNull.Value);
         cmd.Parameters.AddWithValue("@notes", resource.Notes.Trim());
         cmd.Parameters.AddWithValue("@created", DateTime.Now.ToString("o"));
-        int resourceId = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-        await RecordAuditEventAsync("AircraftResource", resourceId, "Saved", $"Saved resource {resource.Registration.Trim()} with status {resource.Status}.");
+        int resourceId = Convert.ToInt32(await ExecuteWriteScalarAsync(cmd, "AircraftResource.Save", "AircraftResource", resource.Registration.Trim()));
         return resourceId;
     }
 
     public async Task<bool> IsResourceDispatchableAsync(string resourceName)
     {
         if (string.IsNullOrWhiteSpace(resourceName)) return true;
+        await RequirePermissionAsync("resources", PermissionLevel.ReadOnly);
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
         using var cmd = connection.CreateCommand();
@@ -1703,6 +2981,7 @@ public class DatabaseService
     /// </summary>
     public async Task<List<Student>> SearchStudentsByNamePrefixAsync(string query, int maxResults = 8)
     {
+        await RequirePermissionAsync("students", PermissionLevel.ReadOnly);
         var list = new List<Student>();
         if (string.IsNullOrWhiteSpace(query)) return list;
         string norm = ArabicTextHelper.Normalize(query);
@@ -1852,7 +3131,21 @@ public class DatabaseService
     {
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
+        using var transaction = connection.BeginTransaction();
+        using (var existsCommand = connection.CreateCommand())
+        {
+            existsCommand.Transaction = transaction;
+            existsCommand.CommandText = "SELECT COUNT(*) FROM TrainingOrders WHERE Id = @id AND (IsArchived = 0 OR IsArchived IS NULL);";
+            existsCommand.Parameters.AddWithValue("@id", orderId);
+            if (Convert.ToInt32(await existsCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture) == 0)
+            {
+                transaction.Commit();
+                return false;
+            }
+        }
+
         using var cmd = connection.CreateCommand();
+        cmd.Transaction = transaction;
         if (string.IsNullOrWhiteSpace(notes))
         {
             cmd.CommandText = @"
@@ -1873,8 +3166,19 @@ public class DatabaseService
         cmd.Parameters.AddWithValue("@date", completionDate.ToString("yyyy-MM-dd"));
         cmd.Parameters.AddWithValue("@id", orderId);
 
-        int rows = await cmd.ExecuteNonQueryAsync();
-        return rows > 0;
+        try
+        {
+            if (_identityService != null)
+                await _identityService.ConsumeApprovalAsync(connection, transaction, "TrainingOrder", orderId, "Complete");
+            int rows = await ExecuteWriteNonQueryAsync(cmd, "TrainingOrder.Complete", "TrainingOrder", orderId.ToString(CultureInfo.InvariantCulture));
+            await transaction.CommitAsync();
+            return rows > 0;
+        }
+        catch
+        {
+            await transaction.RollbackAsync();
+            throw;
+        }
     }
 
     /// <summary>
@@ -1888,7 +3192,7 @@ public class DatabaseService
         cmd.CommandText = "UPDATE TrainingOrders SET IsArchived = 1, ArchivedAt = @now WHERE Id = @id;";
         cmd.Parameters.AddWithValue("@now", DateTime.Now.ToString("o"));
         cmd.Parameters.AddWithValue("@id", orderId);
-        return await cmd.ExecuteNonQueryAsync() > 0;
+        return await ExecuteWriteNonQueryAsync(cmd, "TrainingOrder.Archive", "TrainingOrder", orderId.ToString(CultureInfo.InvariantCulture)) > 0;
     }
 
     /// <summary>
@@ -1901,7 +3205,7 @@ public class DatabaseService
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "UPDATE TrainingOrders SET IsArchived = 0, ArchivedAt = NULL WHERE Id = @id;";
         cmd.Parameters.AddWithValue("@id", orderId);
-        return await cmd.ExecuteNonQueryAsync() > 0;
+        return await ExecuteWriteNonQueryAsync(cmd, "TrainingOrder.Restore", "TrainingOrder", orderId.ToString(CultureInfo.InvariantCulture)) > 0;
     }
 
     /// <summary>
@@ -1909,6 +3213,7 @@ public class DatabaseService
     /// </summary>
     public async Task<List<TrainingOrder>> GetArchivedOrdersAsync()
     {
+        await RequirePermissionAsync("training-orders", PermissionLevel.ReadOnly);
         var list = new List<TrainingOrder>();
         using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync();
@@ -1944,6 +3249,379 @@ public class DatabaseService
         return list;
     }
 
+    public async Task<List<NotificationOutboxItem>> GetPendingNotificationOutboxAsync(int limit = 200)
+    {
+        await RequirePermissionAsync("notifications", PermissionLevel.ReadOnly);
+        var notifications = new List<NotificationOutboxItem>();
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT Id, EventType, EntityType, EntityId, RecipientType, RecipientKey, PayloadJson, Status,
+                   AttemptCount, LastError, CreatedAt, DeliveredAt
+            FROM NotificationOutbox
+            WHERE Status IN ('Pending', 'Failed')
+            ORDER BY CreatedAt, Id
+            LIMIT @limit;
+        ";
+        command.Parameters.AddWithValue("@limit", Math.Clamp(limit, 1, 1000));
+        using var reader = await command.ExecuteReaderAsync();
+        while (await reader.ReadAsync())
+        {
+            notifications.Add(new NotificationOutboxItem
+            {
+                Id = reader.GetInt32(0), EventType = reader.GetString(1), EntityType = reader.GetString(2),
+                EntityId = reader.GetInt32(3), RecipientType = reader.GetString(4), RecipientKey = reader.GetString(5),
+                PayloadJson = reader.GetString(6), Status = reader.GetString(7), AttemptCount = reader.GetInt32(8),
+                LastError = reader.IsDBNull(9) ? null : reader.GetString(9),
+                CreatedAt = DateTime.Parse(reader.GetString(10), CultureInfo.InvariantCulture),
+                DeliveredAt = reader.IsDBNull(11) ? null : DateTime.Parse(reader.GetString(11), CultureInfo.InvariantCulture)
+            });
+        }
+        return notifications;
+    }
+
+    public async Task<bool> RecordNotificationAttemptAsync(int notificationId, bool delivered, string? error = null)
+    {
+        if (notificationId <= 0) return false;
+        using var connection = new SqliteConnection(_connectionString);
+        await connection.OpenAsync();
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            UPDATE NotificationOutbox
+            SET Status = @status, AttemptCount = AttemptCount + 1, LastError = @error, DeliveredAt = @deliveredAt
+            WHERE Id = @id AND Status <> 'Delivered';
+        ";
+        command.Parameters.AddWithValue("@status", delivered ? "Delivered" : "Failed");
+        command.Parameters.AddWithValue("@error", delivered || string.IsNullOrWhiteSpace(error) ? DBNull.Value : error.Trim());
+        command.Parameters.AddWithValue("@deliveredAt", delivered ? DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) : DBNull.Value);
+        command.Parameters.AddWithValue("@id", notificationId);
+        return await ExecuteWriteNonQueryAsync(command, delivered ? "NotificationOutbox.Delivered" : "NotificationOutbox.Failed", "NotificationOutbox", notificationId.ToString(CultureInfo.InvariantCulture)) > 0;
+    }
+
+    private async Task RequirePermissionAsync(string resource, PermissionLevel level)
+    {
+        if (_identityService != null)
+            await _identityService.RequireCurrentPermissionAsync(resource, level);
+    }
+
+    private async Task<int> ExecuteWriteNonQueryAsync(SqliteCommand command, string operation, string entityType, string? entityId = null)
+    {
+        string correlationId = Guid.NewGuid().ToString("N");
+        SqliteTransaction? ownedTransaction = null;
+        try
+        {
+            if (_identityService != null && !string.Equals(entityType, "AuditEvent", StringComparison.OrdinalIgnoreCase))
+                await _identityService.RequireOperationPermissionAsync(operation, entityType);
+            if (command.Transaction == null)
+            {
+                ownedTransaction = command.Connection!.BeginTransaction();
+                command.Transaction = ownedTransaction;
+            }
+
+            string? beforeLookup = operation is "TrainingOrder.Create" or "TrainingSession.Schedule" or "FlightRecord.Create" or "TrainingAssessment.Create" or "ComplianceRecord.Create" or "DispatchRelease.Create" or "TrainingSession.Cancelled" or "TrainingSession.NoShow" or "AvailabilityWindow.CreateResource" or "AvailabilityWindow.CreateSchedule"
+                ? null
+                : entityId;
+            EntitySnapshot? before = string.Equals(entityType, "AuditEvent", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : await CaptureEntitySnapshotAsync(command.Connection!, command.Transaction, entityType, beforeLookup);
+            int rows = await command.ExecuteNonQueryAsync();
+            if (!string.Equals(entityType, "AuditEvent", StringComparison.OrdinalIgnoreCase))
+            {
+                EntitySnapshot? after = await CaptureEntitySnapshotAsync(command.Connection!, command.Transaction, entityType, entityId);
+                await InsertMutationAuditAsync(command, operation, entityType, entityId, before, after, null);
+            }
+            if (ownedTransaction != null)
+                await ownedTransaction.CommitAsync();
+            return rows;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            if (ownedTransaction != null) await ownedTransaction.RollbackAsync();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (ownedTransaction != null)
+                await ownedTransaction.RollbackAsync();
+            AppLogService.LogException(operation, ex, entityType, entityId, correlationId);
+            throw new InvalidOperationException($"Database write failed. Correlation ID: {correlationId}", ex);
+        }
+        finally
+        {
+            if (ownedTransaction != null)
+                await ownedTransaction.DisposeAsync();
+        }
+    }
+
+    private async Task<object?> ExecuteWriteScalarAsync(SqliteCommand command, string operation, string entityType, string? entityId = null)
+    {
+        string correlationId = Guid.NewGuid().ToString("N");
+        SqliteTransaction? ownedTransaction = null;
+        try
+        {
+            if (_identityService != null && !string.Equals(entityType, "AuditEvent", StringComparison.OrdinalIgnoreCase))
+                await _identityService.RequireOperationPermissionAsync(operation, entityType);
+            if (command.Transaction == null)
+            {
+                ownedTransaction = command.Connection!.BeginTransaction();
+                command.Transaction = ownedTransaction;
+            }
+
+            string? beforeLookup = operation is "Student.Create" or "TrainingOrder.Create" or "TrainingSession.Schedule" or "FlightRecord.Create" or "TrainingAssessment.Create" or "ComplianceRecord.Create" or "DispatchRelease.Create" or "TrainingSession.Cancelled" or "TrainingSession.NoShow" or "AvailabilityWindow.CreateResource" or "AvailabilityWindow.CreateSchedule"
+                ? null
+                : entityId;
+            EntitySnapshot? before = string.Equals(entityType, "AuditEvent", StringComparison.OrdinalIgnoreCase)
+                ? null
+                : await CaptureEntitySnapshotAsync(command.Connection!, command.Transaction, entityType, beforeLookup);
+            object? result = await command.ExecuteScalarAsync();
+            if (!string.Equals(entityType, "AuditEvent", StringComparison.OrdinalIgnoreCase))
+            {
+                string? scalarEntityId = result == null || result == DBNull.Value ? null : Convert.ToString(result, CultureInfo.InvariantCulture);
+                EntitySnapshot? after = await CaptureEntitySnapshotAsync(command.Connection!, command.Transaction, entityType, scalarEntityId ?? entityId);
+                await InsertMutationAuditAsync(command, operation, entityType, entityId, before, after, result);
+            }
+            if (ownedTransaction != null)
+                await ownedTransaction.CommitAsync();
+            return result;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            if (ownedTransaction != null) await ownedTransaction.RollbackAsync();
+            throw;
+        }
+        catch (Exception ex)
+        {
+            if (ownedTransaction != null)
+                await ownedTransaction.RollbackAsync();
+            AppLogService.LogException(operation, ex, entityType, entityId, correlationId);
+            throw new InvalidOperationException($"Database write failed. Correlation ID: {correlationId}", ex);
+        }
+        finally
+        {
+            if (ownedTransaction != null)
+                await ownedTransaction.DisposeAsync();
+        }
+    }
+
+    private async Task<EntitySnapshot?> CaptureEntitySnapshotAsync(SqliteConnection connection, SqliteTransaction? transaction, string entityType, string? lookupValue)
+    {
+        if (string.IsNullOrWhiteSpace(lookupValue)) return null;
+        string? identity = entityType switch
+        {
+            "Student" => "Students",
+            "TrainingOrder" => "TrainingOrders",
+            "TrainingSession" => "TrainingSessions",
+            "FlightRecord" => "FlightRecords",
+            "TrainingAssessment" => "TrainingAssessments",
+            "PersonnelRecord" => "PersonnelRecords",
+            "ComplianceRecord" => "ComplianceRecords",
+            "AircraftResource" => "AircraftResources",
+            "Part141Batch" => "Part141Batches",
+            "ETPBatch" => "ETPBatches",
+            "DispatchRelease" => "DispatchReleases",
+            "SessionException" => "SessionExceptions",
+            "AvailabilityWindow" => "AvailabilityWindows",
+            "NotificationOutbox" => "NotificationOutbox",
+            _ => null
+        };
+        if (identity == null) return null;
+
+        string keyColumn = entityType switch
+        {
+            "AircraftResource" when !int.TryParse(lookupValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out _) => "Registration",
+            "Part141Batch" when !int.TryParse(lookupValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out _) => "BatchId",
+            "ETPBatch" when !int.TryParse(lookupValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out _) => "BatchId",
+            "PersonnelRecord" when !int.TryParse(lookupValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out _) => "FullName",
+            _ => "Id"
+        };
+        using var snapshotCommand = connection.CreateCommand();
+        snapshotCommand.Transaction = transaction;
+        snapshotCommand.CommandText = $"SELECT * FROM [{identity}] WHERE [{keyColumn}] = @key LIMIT 1;";
+        snapshotCommand.Parameters.AddWithValue("@key", TryResolveNumericEntityId(lookupValue) is int numericKey && keyColumn == "Id" ? numericKey : lookupValue);
+        using var reader = await snapshotCommand.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return null;
+        var values = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        for (int ordinal = 0; ordinal < reader.FieldCount; ordinal++)
+            values[reader.GetName(ordinal)] = reader.IsDBNull(ordinal) ? null : reader.GetValue(ordinal);
+        int? id = values.TryGetValue("Id", out object? rawId) && rawId != null
+            ? Convert.ToInt32(rawId, CultureInfo.InvariantCulture)
+            : null;
+        return new EntitySnapshot(id, System.Text.Json.JsonSerializer.Serialize(values));
+    }
+
+    private async Task InsertMutationAuditAsync(SqliteCommand sourceCommand, string operation, string entityType, string? requestedEntityId, EntitySnapshot? before, EntitySnapshot? after, object? scalarResult)
+    {
+        string? scalarEntityId = scalarResult == null || scalarResult == DBNull.Value
+            ? null
+            : Convert.ToString(scalarResult, CultureInfo.InvariantCulture);
+        string? auditEntityId = scalarEntityId ?? requestedEntityId;
+        int numericEntityId = TryResolveNumericEntityId(scalarEntityId) ?? before?.Id ?? after?.Id ?? TryResolveNumericEntityId(requestedEntityId) ?? 0;
+        int versionNo;
+        using (var versionCommand = sourceCommand.Connection!.CreateCommand())
+        {
+            versionCommand.Transaction = sourceCommand.Transaction;
+            versionCommand.CommandText = "SELECT COALESCE(MAX(VersionNo), 0) + 1 FROM AuditEvents WHERE EntityType = @entityType AND EntityId = @entityId;";
+            versionCommand.Parameters.AddWithValue("@entityType", entityType);
+            versionCommand.Parameters.AddWithValue("@entityId", numericEntityId);
+            versionNo = Convert.ToInt32(await versionCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+        }
+        UserSession? session = _identityService?.CurrentSession;
+        string action = operation switch
+        {
+            "TrainingOrder.Complete" => "Completed",
+            "TrainingOrder.SetCompletionDate" => "StatusChanged",
+            "TrainingOrder.Archive" or "Part141Batch.Archive" => "Archived",
+            "TrainingOrder.Restore" => "Restored",
+            "TrainingSession.Schedule" or "FlightRecord.Create" or "TrainingAssessment.Create" or "ComplianceRecord.Create" or "Student.Create" or "TrainingOrder.Create" => "Created",
+            "TrainingSession.ChangeStatus" => "StatusChanged",
+            "TrainingSession.Reschedule" => "Rescheduled",
+            "TrainingSession.Release" => "Released",
+            "TrainingSession.CompleteFromFlight" => "CompletedFromRecord",
+            "DispatchRelease.Create" => "Released",
+            "TrainingSession.Cancelled" => "Cancelled",
+            "TrainingSession.NoShow" => "NoShow",
+            "AvailabilityWindow.CreateResource" or "AvailabilityWindow.CreateSchedule" => "Created",
+            "AvailabilityWindow.ArchiveResource" or "AvailabilityWindow.ArchiveSchedule" => "Archived",
+            "Student.MergeOrders" or "Student.MergeDeleteSource" => "Merged",
+            "Database.ClearAllData" => "Cleared",
+            "AircraftResource.AdvanceHobbs" => "HoursUpdated",
+            "AircraftResource.Save" or "Personnel.Save" or "Part141Batch.Save" or "ETPBatch.Save" => "Saved",
+            "Part141Batch.Update" or "ETPBatch.Update" => "Updated",
+            "TrainingOrder.Update" or "Student.UpdateNationality" => "Updated",
+            _ => "Changed"
+        };
+
+        using var auditCommand = sourceCommand.Connection!.CreateCommand();
+        auditCommand.Transaction = sourceCommand.Transaction;
+        auditCommand.CommandText = @"
+            INSERT INTO AuditEvents (EntityType, EntityId, Action, Summary, Actor, OccurredAt, UserId, SessionId, LocationId, VersionNo, BeforeJson, AfterJson)
+            VALUES (@entityType, @entityId, @action, @summary, @actor, @occurredAt, @userId, @sessionId, @locationId, @versionNo, @beforeJson, @afterJson);
+        ";
+        auditCommand.Parameters.AddWithValue("@entityType", entityType);
+        auditCommand.Parameters.AddWithValue("@entityId", numericEntityId);
+        auditCommand.Parameters.AddWithValue("@action", action);
+        auditCommand.Parameters.AddWithValue("@summary", $"{operation} succeeded{(string.IsNullOrWhiteSpace(auditEntityId) ? string.Empty : $" for {auditEntityId}")}." );
+        auditCommand.Parameters.AddWithValue("@actor", session?.UserName ?? "Local Operator");
+        auditCommand.Parameters.AddWithValue("@occurredAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+        auditCommand.Parameters.AddWithValue("@userId", session != null ? (object)session.UserId : DBNull.Value);
+        auditCommand.Parameters.AddWithValue("@sessionId", (object?)session?.SessionId ?? DBNull.Value);
+        auditCommand.Parameters.AddWithValue("@locationId", session?.LocationId.HasValue == true ? session.LocationId.Value : DBNull.Value);
+        auditCommand.Parameters.AddWithValue("@versionNo", versionNo);
+        auditCommand.Parameters.AddWithValue("@beforeJson", (object?)before?.Json ?? DBNull.Value);
+        auditCommand.Parameters.AddWithValue("@afterJson", (object?)after?.Json ?? DBNull.Value);
+        await auditCommand.ExecuteNonQueryAsync();
+
+        await QueueSessionNotificationAsync(sourceCommand.Connection!, sourceCommand.Transaction!, operation, entityType, numericEntityId);
+    }
+
+    private static async Task QueueSessionNotificationAsync(SqliteConnection connection, SqliteTransaction transaction, string operation, string entityType, int entityId)
+    {
+        string? sessionId = null;
+        string? eventType = operation switch
+        {
+            "TrainingSession.Schedule" => "BookingCreated",
+            "TrainingSession.Reschedule" => "ScheduleChanged",
+            "TrainingSession.Release" => "DispatchReleased",
+            "TrainingSession.CompleteFromFlight" => "FlightCompleted",
+            "TrainingSession.Cancelled" => "BookingCancelled",
+            "TrainingSession.NoShow" => "BookingNoShow",
+            "TrainingSession.ChangeStatus" => "SessionStateChanged",
+            _ => null
+        };
+        if (eventType == null) return;
+
+        using var sessionCommand = connection.CreateCommand();
+        sessionCommand.Transaction = transaction;
+        if (string.Equals(entityType, "SessionException", StringComparison.OrdinalIgnoreCase))
+        {
+            sessionCommand.CommandText = "SELECT TrainingSessionId FROM SessionExceptions WHERE Id = @id;";
+        }
+        else
+        {
+            sessionCommand.CommandText = "SELECT Id FROM TrainingSessions WHERE Id = @id;";
+        }
+        sessionCommand.Parameters.AddWithValue("@id", entityId);
+        sessionId = Convert.ToString(await sessionCommand.ExecuteScalarAsync(), CultureInfo.InvariantCulture);
+        if (!int.TryParse(sessionId, NumberStyles.Integer, CultureInfo.InvariantCulture, out int trainingSessionId))
+            return;
+
+        using var detailsCommand = connection.CreateCommand();
+        detailsCommand.Transaction = transaction;
+        detailsCommand.CommandText = @"
+            SELECT StudentId, InstructorName, ResourceName, Location, LessonTitle, StartAt, EndAt, Status
+            FROM TrainingSessions WHERE Id = @id;
+        ";
+        detailsCommand.Parameters.AddWithValue("@id", trainingSessionId);
+        using var reader = await detailsCommand.ExecuteReaderAsync();
+        if (!await reader.ReadAsync()) return;
+        int studentId = reader.GetInt32(0);
+        string instructor = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+        string resource = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+        string location = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+        string lesson = reader.IsDBNull(4) ? string.Empty : reader.GetString(4);
+        string startAt = reader.GetString(5);
+        string endAt = reader.GetString(6);
+        string status = reader.GetString(7);
+        await reader.DisposeAsync();
+
+        if (operation == "TrainingSession.ChangeStatus")
+            eventType = $"Session{status}";
+        if (operation == "TrainingSession.Cancelled" || operation == "TrainingSession.NoShow")
+        {
+            using var exceptionCommand = connection.CreateCommand();
+            exceptionCommand.Transaction = transaction;
+            exceptionCommand.CommandText = "SELECT Reason FROM SessionExceptions WHERE Id = @id;";
+            exceptionCommand.Parameters.AddWithValue("@id", entityId);
+            object? exceptionReason = await exceptionCommand.ExecuteScalarAsync();
+            if (exceptionReason != null && exceptionReason != DBNull.Value)
+                lesson = $"{lesson} — {Convert.ToString(exceptionReason, CultureInfo.InvariantCulture)}";
+        }
+
+        string payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            eventType,
+            trainingSessionId,
+            studentId,
+            lesson,
+            resource,
+            location,
+            startAt,
+            endAt,
+            status
+        });
+        var recipients = new List<(string Type, string Key)> { ("Student", studentId.ToString(CultureInfo.InvariantCulture)) };
+        if (!string.IsNullOrWhiteSpace(instructor)) recipients.Add(("Instructor", instructor));
+        if (!string.IsNullOrWhiteSpace(resource)) recipients.Add(("Resource", resource));
+        if (!string.IsNullOrWhiteSpace(location)) recipients.Add(("DispatchLocation", location));
+        foreach (var recipient in recipients)
+        {
+            using var outboxCommand = connection.CreateCommand();
+            outboxCommand.Transaction = transaction;
+            outboxCommand.CommandText = @"
+                INSERT INTO NotificationOutbox (EventType, EntityType, EntityId, RecipientType, RecipientKey, PayloadJson, Status, AttemptCount, CreatedAt)
+                VALUES (@eventType, 'TrainingSession', @entityId, @recipientType, @recipientKey, @payload, 'Pending', 0, @createdAt);
+            ";
+            outboxCommand.Parameters.AddWithValue("@eventType", eventType);
+            outboxCommand.Parameters.AddWithValue("@entityId", trainingSessionId);
+            outboxCommand.Parameters.AddWithValue("@recipientType", recipient.Type);
+            outboxCommand.Parameters.AddWithValue("@recipientKey", recipient.Key);
+            outboxCommand.Parameters.AddWithValue("@payload", payload);
+            outboxCommand.Parameters.AddWithValue("@createdAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+            await outboxCommand.ExecuteNonQueryAsync();
+        }
+    }
+
+    private static int? TryResolveNumericEntityId(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        int separator = value.LastIndexOf(':');
+        string candidate = separator >= 0 ? value[(separator + 1)..] : value;
+        return int.TryParse(candidate, NumberStyles.Integer, CultureInfo.InvariantCulture, out int entityId) ? entityId : null;
+    }
+
+    private sealed record EntitySnapshot(int? Id, string Json);
+
     private static DateTime? ParseNullableDate(SqliteDataReader reader, int ordinal)
     {
         if (reader.IsDBNull(ordinal)) return null;
@@ -1959,6 +3637,7 @@ public class DatabaseService
     /// </summary>
     public async Task<List<Part141Batch>> GetPart141BatchesAsync(int? academicYear = null, string? searchQuery = null)
     {
+        await RequirePermissionAsync("training-orders", PermissionLevel.ReadOnly);
         var batches = new List<Part141Batch>();
 
         using var connection = new SqliteConnection(_connectionString);
@@ -2141,12 +3820,12 @@ public class DatabaseService
 
         if (batch.Id > 0)
         {
-            await cmd.ExecuteNonQueryAsync();
+            await ExecuteWriteNonQueryAsync(cmd, "Part141Batch.Update", "Part141Batch", batch.Id.ToString(CultureInfo.InvariantCulture));
             return batch.Id;
         }
         else
         {
-            var res = await cmd.ExecuteScalarAsync();
+            var res = await ExecuteWriteScalarAsync(cmd, "Part141Batch.Save", "Part141Batch", batch.BatchId);
             return Convert.ToInt32(res);
         }
     }
@@ -2159,7 +3838,7 @@ public class DatabaseService
         cmd.CommandText = "UPDATE Part141Batches SET IsArchived = 1, ArchivedAt = @now WHERE Id = @id;";
         cmd.Parameters.AddWithValue("@now", DateTime.Now.ToString("o"));
         cmd.Parameters.AddWithValue("@id", batchId);
-        return await cmd.ExecuteNonQueryAsync() > 0;
+        return await ExecuteWriteNonQueryAsync(cmd, "Part141Batch.Archive", "Part141Batch", batchId.ToString(CultureInfo.InvariantCulture)) > 0;
     }
 
     /// <summary>
@@ -2168,6 +3847,7 @@ public class DatabaseService
     /// </summary>
     public async Task<List<ETPBatch>> GetETPBatchesAsync(int? academicYear = null, string? searchQuery = null)
     {
+        await RequirePermissionAsync("training-orders", PermissionLevel.ReadOnly);
         var batches = new List<ETPBatch>();
 
         using var connection = new SqliteConnection(_connectionString);
@@ -2304,12 +3984,12 @@ public class DatabaseService
 
         if (batch.Id > 0)
         {
-            await cmd.ExecuteNonQueryAsync();
+            await ExecuteWriteNonQueryAsync(cmd, "ETPBatch.Update", "ETPBatch", batch.Id.ToString(CultureInfo.InvariantCulture));
             return batch.Id;
         }
         else
         {
-            var res = await cmd.ExecuteScalarAsync();
+            var res = await ExecuteWriteScalarAsync(cmd, "ETPBatch.Save", "ETPBatch", batch.BatchId);
             return Convert.ToInt32(res);
         }
     }

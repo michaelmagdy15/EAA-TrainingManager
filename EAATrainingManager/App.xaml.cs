@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using Microsoft.UI.Xaml;
+using EAATrainingManager.Models;
 using EAATrainingManager.Services;
 
 namespace EAATrainingManager;
@@ -8,6 +9,7 @@ namespace EAATrainingManager;
 public partial class App : Application
 {
     private Window? _window;
+    private LoginWindow? _loginWindow;
     public static Window? MainWindowInstance { get; private set; }
     private static System.Threading.Mutex? _singleInstanceMutex;
 
@@ -21,7 +23,16 @@ public partial class App : Application
     public static ExcelSyncService ExcelSyncService { get; } = new(DatabaseService);
     public static BackupService BackupService { get; } = new(DatabaseService.GetDatabasePath());
     public static ExcelMirrorService ExcelMirrorService { get; } = new(DatabaseService, ExcelSyncService);
+    public static IdentityService IdentityService { get; } = new(DatabaseService);
+    public static CurriculumService CurriculumService { get; } = new(DatabaseService, IdentityService);
+    public static TrainingRecordService TrainingRecordService { get; } = new(DatabaseService, IdentityService);
+    public static FlightOperationsService FlightOperationsService { get; } = new(DatabaseService);
     public static UpdateService UpdateService { get; } = new();
+
+    static App()
+    {
+        DatabaseService.AttachIdentityService(IdentityService);
+    }
 
     public App()
     {
@@ -46,15 +57,19 @@ public partial class App : Application
         UnhandledException += (s, e) =>
         {
             System.Diagnostics.Debug.WriteLine($"[WinUI UnhandledException] {e.Message} \n {e.Exception}");
+            AppLogService.LogException("WinUI.UnhandledException", e.Exception);
             e.Handled = true; // Prevents 0xc000027b fail-fast crash
         };
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
         {
             System.Diagnostics.Debug.WriteLine($"[AppDomain UnhandledException] {e.ExceptionObject}");
+            if (e.ExceptionObject is Exception exception)
+                AppLogService.LogException("AppDomain.UnhandledException", exception);
         };
         System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, e) =>
         {
             System.Diagnostics.Debug.WriteLine($"[TaskScheduler UnobservedTaskException] {e.Exception}");
+            AppLogService.LogException("TaskScheduler.UnobservedTaskException", e.Exception);
             e.SetObserved();
         };
 
@@ -63,7 +78,29 @@ public partial class App : Application
 
     protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args)
     {
+        EnsureLoginWindow();
+    }
+
+    internal void OnLoginSucceeded()
+    {
+        _loginWindow?.Close();
+        _loginWindow = null;
         EnsureMainWindow();
+    }
+
+    internal void ReturnToLogin()
+    {
+        _window?.Close();
+        _window = null;
+        MainWindowInstance = null;
+        EnsureLoginWindow();
+    }
+
+    private void EnsureLoginWindow()
+    {
+        if (_loginWindow != null) return;
+        _loginWindow = new LoginWindow();
+        _loginWindow.Activate();
     }
 
     private void EnsureMainWindow()
@@ -71,6 +108,17 @@ public partial class App : Application
         if (_window != null) return;
         _window = new MainWindow();
         MainWindowInstance = _window;
+        _window.Closed += async (_, _) =>
+        {
+            UserSession? session = IdentityService.CurrentSession;
+            if (session != null)
+                await IdentityService.EndSessionAsync(session.SessionId);
+            if (_window != null)
+            {
+                _window = null;
+                MainWindowInstance = null;
+            }
+        };
         _window.Activate();
     }
 

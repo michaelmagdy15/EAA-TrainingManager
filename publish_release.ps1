@@ -37,17 +37,20 @@ try {
 
 if ($isGhLoggedIn) {
     Write-Host "  -> GitHub CLI authenticated via user credentials." -ForegroundColor Green
-    [Environment]::SetEnvironmentVariable('GH_TOKEN', $null, 'Process')
-    [Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $null, 'Process')
 } else {
-    $Token = "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"
+    $Token = $env:EAA_TMS_GITHUB_TOKEN
+    if ([string]::IsNullOrWhiteSpace($Token)) { $Token = $env:GH_TOKEN }
+    if ([string]::IsNullOrWhiteSpace($Token)) { $Token = $env:GITHUB_TOKEN }
+    if ([string]::IsNullOrWhiteSpace($Token)) {
+        throw "Authenticate with 'gh auth login' or provide EAA_TMS_GITHUB_TOKEN/GH_TOKEN before publishing."
+    }
     [Environment]::SetEnvironmentVariable('GH_TOKEN', $Token, 'Process')
     [Environment]::SetEnvironmentVariable('GITHUB_TOKEN', $Token, 'Process')
 }
 
 # 1. Determine Target Version
 $ManifestPath = Join-Path $ScriptRoot "update_manifest.json"
-$CurrentVersion = "2.2.1"
+$CurrentVersion = "2.2.8"
 
 if (Test-Path $ManifestPath) {
     try {

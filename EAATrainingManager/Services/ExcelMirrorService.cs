@@ -9,13 +9,17 @@ public class ExcelMirrorService
 {
     private readonly DatabaseService _databaseService;
     private readonly ExcelSyncService _excelSyncService;
+    private readonly string? _mirrorDirectory;
+    private readonly bool _copyToDesktop;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private CancellationTokenSource? _debounceCts;
 
-    public ExcelMirrorService(DatabaseService databaseService, ExcelSyncService excelSyncService)
+    public ExcelMirrorService(DatabaseService databaseService, ExcelSyncService excelSyncService, string? mirrorDirectory = null, bool copyToDesktop = true)
     {
         _databaseService = databaseService;
         _excelSyncService = excelSyncService;
+        _mirrorDirectory = string.IsNullOrWhiteSpace(mirrorDirectory) ? null : Path.GetFullPath(mirrorDirectory);
+        _copyToDesktop = copyToDesktop;
     }
 
     /// <summary>
@@ -41,6 +45,7 @@ public class ExcelMirrorService
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[ExcelMirrorService.QueueMirrorSync] {ex.Message}");
+                AppLogService.LogException("ExcelMirror.QueueSync", ex, "Workbook", "EAA_Master_Mirror.xlsx");
             }
         }, token);
     }
@@ -52,26 +57,35 @@ public class ExcelMirrorService
         {
             // 1. Local AppData shadow mirror
             string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string appFolder = Path.Combine(localAppData, "EAA_TrainingManager");
+            string appFolder = _mirrorDirectory ?? Path.Combine(localAppData, "EAA_TrainingManager");
+            Directory.CreateDirectory(appFolder);
             string appMirrorPath = Path.Combine(appFolder, "EAA_Master_Mirror.xlsx");
 
             await _excelSyncService.ExportOfficialMinistryReportAsync(appMirrorPath);
 
             // 2. Desktop mirror for immediate user access
-            try
+            if (_copyToDesktop)
             {
-                string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-                if (Directory.Exists(desktop))
+                try
                 {
-                    string desktopPath = Path.Combine(desktop, "EAA_Master_Mirror.xlsx");
-                    File.Copy(appMirrorPath, desktopPath, true);
+                    string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+                    if (Directory.Exists(desktop))
+                    {
+                        string desktopPath = Path.Combine(desktop, "EAA_Master_Mirror.xlsx");
+                        File.Copy(appMirrorPath, desktopPath, true);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ExcelMirrorService.DesktopCopy] {ex}");
+                    AppLogService.LogException("ExcelMirror.DesktopCopy", ex, "Workbook", "EAA_Master_Mirror.xlsx");
                 }
             }
-            catch { }
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[ExcelMirrorService.ExecuteMirrorSyncAsync] {ex.Message}");
+            AppLogService.LogException("ExcelMirror.Execute", ex, "Workbook", "EAA_Master_Mirror.xlsx");
         }
         finally
         {
